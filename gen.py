@@ -1,6 +1,9 @@
-import random
 import ast
+import logging
+import random
 from enum import Enum
+
+_LOGGER = logging.getLogger(__name__)
 
 MAX_DIFICULTY = 5
 
@@ -155,6 +158,6 @@ def generate(difficulty):
         except:
             break
     str_expr = str(expr.expr).replace("/", "∶").replace("*", "×") + " = ?"
-    print(f"Пример: {str_expr} = ?")
-    print(f"Ответ: {expr.value}")
+    _LOGGER.info(f"Пример: {str_expr} = ?")
+    _LOGGER.info(f"Ответ: {expr.value}")
     return str_expr, expr.value

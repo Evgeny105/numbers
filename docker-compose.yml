@@ -13,23 +13,13 @@ services:
       start_period: 10s
       timeout: 5s
 
-  # pgvector:
-  #   image: pgvector/pgvector:pg14
-  #   container_name: pgvector
-  #   environment:
-  #     POSTGRES_USER: user
-  #     POSTGRES_PASSWORD: password123
-  #     POSTGRES_DB: vectordb
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: [ "CMD-SHELL", "pg_isready -U user -d vectordb" ]
-  #     interval: 30s
-  #     retries: 3
-  #     start_period: 10s
-  #     timeout: 5s
+  math-bot:
+    build: .
+    container_name: math-bot-container
+    env_file: .env
+    depends_on:
+      - redis
+    restart: unless-stopped
 
 volumes:
   redis-data:

@@ -12,6 +12,7 @@ services:
       retries: 3
       start_period: 10s
       timeout: 5s
+    restart: unless-stopped
 
   math-bot:
     build: .
@@ -19,6 +20,8 @@ services:
     env_file: .env
     depends_on:
       - redis
+    environment:
+      - REDIS=redis:6379      
     restart: unless-stopped
 
 volumes:

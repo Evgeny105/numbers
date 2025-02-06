@@ -182,8 +182,8 @@ async def answer3_handler(message: Message, state: FSMContext) -> None:
                 f"Не расстраивайся, верный ответ был: <b>{reight_answer}</b>\n"
                 "Давай попробуем другой..."
             )
-            await get_new_task(message, state)
             await subtract_points(state)
+            await get_new_task(message, state)
             await state.set_state(UserStates.await_1_answer)
     except:
         await message.answer(

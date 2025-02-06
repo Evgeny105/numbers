@@ -158,6 +158,6 @@ def generate(difficulty):
         except:
             break
     str_expr = str(expr.expr).replace("/", "∶").replace("*", "×") + " = ?"
-    _LOGGER.info(f"Пример: {str_expr} = ?")
+    _LOGGER.info(f"Пример: {str_expr}")
     _LOGGER.info(f"Ответ: {expr.value}")
     return str_expr, expr.value

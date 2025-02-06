@@ -24,7 +24,7 @@ sudo docker build -t math-bot-img .
 Для запуска бота в Docker-контейнере с автоматическим перезапуском в случае сбоя выполните:
 
 ```bash
-sudo docker-compose up --build -d
+sudo docker compose up --build -d
 ```
 
 #### Просмотр логов
@@ -43,7 +43,7 @@ sudo docker logs -f math-bot-container
 
 1. Остановите и удалите существующий контейнер:
 ```bash
-sudo docker-compose down
+sudo docker compose down
 sudo docker image prune
 ```
 1. Следуйте инструкциям по сборке и запуску выше.

@@ -66,7 +66,11 @@ async def get_new_task(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     difficulty = data.get("difficulty")
     expression, answer = generate(difficulty)
-    await state.update_data(expression=expression, answer=answer)
+    await state.update_data(
+        expression=expression,
+        answer=answer,
+        user_name=message.from_user.full_name,
+    )
     await message.answer(
         ("Реши-ка вот такой пример: \n" f"<code>{expression}</code>")
     )
@@ -93,6 +97,7 @@ async def start_handler(message: Message, state: FSMContext) -> None:
             f"Сейчас мы с тобой работаем на уровне сложности: {difficulty}"
         )
     # await state.set_state(UserStates.solved)
+    await state.update_data(user_name=message.from_user.full_name)
     await get_new_task(message, state)
 
 

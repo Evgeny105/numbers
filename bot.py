@@ -18,6 +18,8 @@ from aiogram.types import BufferedInputFile, Message
 from aiogram.utils.markdown import hbold
 
 from redis_handlers import init_redis
+from states import UserStates
+from gen import generate
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +33,44 @@ except Exception as e:
     _LOGGER.error(f"Redis initialization failed: {e}")
     storage = MemoryStorage()
     _LOGGER.warning("Using MemoryStorage instead of Redis")
-dp = Dispatcher(storage=MemoryStorage())
+dp = Dispatcher(storage=storage)
+
+
+async def add_points(state: FSMContext) -> None:
+    data = await state.get_data()
+    # difficulty = data.get("difficulty")
+    points = data.get("points")
+    if points is None:
+        points = 0
+    points += 1
+    points = min(points, 49)
+    points = max(points, 0)
+    difficulty = points // 10
+    await state.update_data(difficulty=difficulty, points=points)
+
+
+async def subtract_points(state: FSMContext) -> None:
+    data = await state.get_data()
+    # difficulty = data.get("difficulty")
+    points = data.get("points")
+    if points is None:
+        points = 1
+    points -= 1
+    points = min(points, 49)
+    points = max(points, 0)
+    difficulty = points // 10
+    await state.update_data(difficulty=difficulty, points=points)
+
+
+async def get_new_task(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    difficulty = data.get("difficulty")
+    expression, answer = generate(difficulty)
+    await state.update_data(expression=expression, answer=answer)
+    await message.answer(
+        ("Реши-ка вот такой пример: \n" f"<code>{expression}</code>")
+    )
+    await state.set_state(UserStates.await_1_answer)
 
 
 @dp.message(CommandStart())
@@ -53,8 +92,99 @@ async def start_handler(message: Message, state: FSMContext) -> None:
             f"Привет, {hbold(message.from_user.full_name)}! \n"
             f"Сейчас мы с тобой работаем на уровне сложности: {difficulty}"
         )
-    # await state.set_state(AuthForm.email)
-    # await state.update_data(g_client=g_client)
+    # await state.set_state(UserStates.solved)
+    await get_new_task(message, state)
+
+
+@dp.message(UserStates.await_1_answer)
+async def answer1_handler(message: Message, state: FSMContext) -> None:
+    ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
+    try:
+        ans = float(ans)
+        data = await state.get_data()
+        reight_answer = data.get("answer")
+        if ans == reight_answer:
+            await message.answer(("🤩"))
+            await message.answer(
+                "Вау! Верно с первой попытки! 😎\n Это на 5 с плюсом!"
+            )
+            await add_points(state)
+            await get_new_task(message, state)
+        else:
+            await message.answer(
+                (
+                    "Нет, это не верно 😢\n"
+                    "Проверь свои вычисления и попробуй еще раз, у тебя всё получится!\n"
+                    "Повторяю пример:\n"
+                    f"<code>{data.get('expression')}</code>\n"
+                )
+            )
+            await state.set_state(UserStates.await_2_answer)
+    except:
+        await message.answer(
+            "Это все конечно хорошо, но в ответ мне нужны только цифры 😋"
+        )
+        return
+
+
+@dp.message(UserStates.await_2_answer)
+async def answer2_handler(message: Message, state: FSMContext) -> None:
+    ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
+    try:
+        ans = float(ans)
+        data = await state.get_data()
+        reight_answer = data.get("answer")
+        if ans == reight_answer:
+            await message.answer(
+                "Верно со второй попытки! 😎\n Это на 4 с плюсом!"
+            )
+            await add_points(state)
+            await get_new_task(message, state)
+        else:
+            await message.answer(
+                (
+                    "К сожалению, это не верно 😢\n"
+                    "Проверь еще раз где-то спряталась ошибка ты её найдешь и мы победим!\n"
+                    "Повторяю пример:\n"
+                    f"<code>{data.get('expression')}</code>\n"
+                )
+            )
+            await state.set_state(UserStates.await_3_answer)
+    except:
+        await message.answer(
+            "Это все конечно хорошо, но в ответ мне нужны только цифры 😋"
+        )
+        return
+
+
+@dp.message(UserStates.await_3_answer)
+async def answer3_handler(message: Message, state: FSMContext) -> None:
+    ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
+    try:
+        ans = float(ans)
+        data = await state.get_data()
+        reight_answer = data.get("answer")
+        if ans == reight_answer:
+            await message.answer(
+                "Верно с третьей попытки! 😎\n Ура! Это так здорово что у тебя получилось! 🎆🎆🎆"
+            )
+            await add_points(state)
+            await get_new_task(message, state)
+        else:
+            await message.answer(("😢"))
+            await message.answer(
+                "Похоже это очень трудный для тебя пример?\n"
+                f"Не расстраивайся, верный ответ был: <b>{reight_answer}</b>\n"
+                "Давай попробуем другой..."
+            )
+            await get_new_task(message, state)
+            await subtract_points(state)
+            await state.set_state(UserStates.await_1_answer)
+    except:
+        await message.answer(
+            "Это все конечно хорошо, но в ответ мне нужны только цифры 😋"
+        )
+        return
 
 
 @dp.message(Command("stop"))
@@ -71,274 +201,13 @@ async def stop_handler(message: Message, state: FSMContext) -> None:
         )
 
 
-@dp.message(
-    (F.document.mime_type == "application/xml")  # MIME-type XML
-    | (F.document.file_name.endswith(".tcx"))  # For .tcx
-)
-async def handle_tcx_file(
-    message: Message, bot: Bot, state: FSMContext
-) -> None:
-    # Log file details
-    _LOGGER.info(
-        f"Received file: {message.document.file_name}, MIME-type: {message.document.mime_type} "
-        f"from user {message.from_user.full_name}, ID={message.from_user.id}"
-    )
-    if message.document.file_size > 50 * 1024 * 1024:  # 50 MB
-        await message.answer(
-            "The file is too large. Please send a smaller file."
-        )
-        return
-
-    data = await state.get_data()
-    g_client = data.get("g_client")
-    if not g_client:
-        g_client = await check_auth(message, bot, state)
-        if not g_client:
-            return
-
-    # Get file details
-    file_id = message.document.file_id
-    file = await bot.get_file(file_id)
-    file_path = file.file_path
-
-    # Download the file into memory
-    downloaded_file = await bot.download_file(file_path)
-    file_content = downloaded_file.read()
-    # Check if the file content is a valid TCX file
-    if re.search(rb"<\?xml.*?\?>", file_content) and re.search(
-        rb"<TrainingCenterDatabase", file_content
-    ):
-        try:
-            # Convert the TCX file (in memory)
-            converted_content, summary = convert_tcx_in_memory(file_content)
-            _LOGGER.info("TCX conversion completed successfully.")
-
-            # Send back the converted file
-            await message.answer(
-                "Conversion was successful! Trying to upload to Garmin Connect....\n\n"
-                f"📅 Activity Date & Time: {summary['activity_datetime']}\n"
-                f"⏱ Total Time: {summary['total_time']}\n"
-                f"🛣 Total Distance: {summary['total_distance_km']} km"
-            )
-            try:
-                converted_content_io = io.BytesIO(converted_content)
-                converted_content_io.name = (
-                    f"converted_{message.document.file_name}"
-                )
-                uploaded = g_client.upload(converted_content_io)
-
-                if uploaded:
-                    await message.answer(
-                        "File uploaded successfully to Garmin Connect!"
-                    )
-            except garth.exc.GarthHTTPError as e:
-                await message.answer_document(
-                    BufferedInputFile(
-                        converted_content,
-                        filename=f"converted_{message.document.file_name}",
-                    ),
-                    caption="Something is wrong with uploading. Here is your converted TCX file.",
-                )
-
-        except Exception as e:
-            _LOGGER.error(f"Error during conversion: {e}")
-            await message.answer(
-                "An error occurred while converting the file. Please try again or another file."
-            )
-    else:
-        await message.answer(
-            "The file you sent does not appear to be a valid TCX file."
-        )
-        _LOGGER.info(
-            f"Invalid TCX file received from user {message.from_user.id}."
-        )
-
-
-@dp.message(F.document.file_name.endswith(".fit"))  # For .fit files
-async def handle_fit_file(
-    message: Message, bot: Bot, state: FSMContext
-) -> None:
-    # Log file details
-    _LOGGER.info(
-        f"Received file: {message.document.file_name}, MIME-type: {message.document.mime_type} "
-        f"from user {message.from_user.full_name}, ID={message.from_user.id}"
-    )
-    if message.document.file_size > 50 * 1024 * 1024:  # 50 MB
-        await message.answer(
-            "The file is too large. Please send a smaller file."
-        )
-        return
-
-    data = await state.get_data()
-    g_client = data.get("g_client")
-    if not g_client:
-        g_client = await check_auth(message, bot, state)
-        if not g_client:
-            return
-
-    # Get file details
-    file_id = message.document.file_id
-    file = await bot.get_file(file_id)
-    file_path = file.file_path
-
-    # Download the file into memory
-    downloaded_file = await bot.download_file(file_path)
-    file_content = downloaded_file.read()
-
-    try:
-        # Process the FIT file
-        app_fit = FitFile.from_bytes(file_content)
-        summary = {}
-        for record in app_fit.records:
-            m = record.message
-            if isinstance(m, SessionMessage):
-                summary["activity_datetime"] = datetime.fromtimestamp(
-                    m.start_time / 1000
-                ).strftime("%d %b @ %H:%M UTC")
-                total_seconds_rounded = round(m.total_timer_time)
-                summary["total_time"] = str(
-                    timedelta(seconds=total_seconds_rounded)
-                )
-                distance_km = float(m.total_distance) / 1000
-                summary["total_distance_km"] = f"{distance_km:.2f}"
-                break
-
-        _LOGGER.info("FIT processing completed successfully.")
-
-        await message.answer(
-            "Trying to upload to Garmin Connect....\n\n"
-            f"📅 Activity Date & Time: {summary['activity_datetime']}\n"
-            f"⏱ Total Time: {summary['total_time']}\n"
-            f"🛣 Total Distance: {summary['total_distance_km']} km"
-        )
-        try:
-            file_content_io = io.BytesIO(file_content)
-            file_content_io.name = message.document.file_name
-            uploaded = g_client.upload(file_content_io)
-
-            if uploaded:
-                await message.answer(
-                    "File uploaded successfully to Garmin Connect!"
-                )
-        except garth.exc.GarthHTTPError as e:
-            await message.answer("Something is wrong with uploading")
-
-    except Exception as e:
-        _LOGGER.error(f"Error during processing FIT-file: {e}")
-        await message.answer(
-            "An error occurred while processing the FIT-file. Please try again or another file."
-        )
-
-
-@dp.message(F.document.file_name.endswith(".zip"))
-async def handle_zip_file(
-    message: Message, bot: Bot, state: FSMContext
-) -> None:
-    """
-    This handler processes ZIP files, extracts TCX files, and sends them back.
-    """
-    _LOGGER.info(
-        f"Received file: {message.document.file_name}, MIME-type: {message.document.mime_type} "
-        f"from user {message.from_user.full_name}, ID={message.from_user.id}"
-    )
-    if message.document.file_size > 50 * 1024 * 1024:  # 50 MB
-        await message.answer(
-            "The file is too large. Please send a smaller file."
-        )
-        return
-
-    data = await state.get_data()
-    g_client = data.get("g_client")
-    if not g_client:
-        g_client = await check_auth(message, bot, state)
-        if not g_client:
-            return
-
-    # Get file details
-    file_id = message.document.file_id
-    file = await bot.get_file(file_id)
-    file_path = file.file_path
-
-    # Download the ZIP file into memory
-    downloaded_file = await bot.download_file(file_path)
-    file_content = downloaded_file.read()
-
-    # Work with the ZIP file in memory
-    try:
-        with zipfile.ZipFile(io.BytesIO(file_content), "r") as zip_ref:
-            for file_name in zip_ref.namelist():
-                if file_name.endswith(".tcx"):
-                    with zip_ref.open(file_name) as tcx_file:
-                        tcx_content = tcx_file.read()
-                        try:
-                            # Convert the TCX file (in memory)
-                            converted_content, summary = convert_tcx_in_memory(
-                                tcx_content
-                            )
-
-                            # Send back the converted file
-                            await message.answer(
-                                "Conversion was successful! Trying to upload to Garmin Connect....\n\n"
-                                f"📅 Activity Date & Time: {summary['activity_datetime']}\n"
-                                f"⏱ Total Time: {summary['total_time']}\n"
-                                f"🛣 Total Distance: {summary['total_distance_km']} km"
-                            )
-                            try:
-                                converted_content_io = io.BytesIO(
-                                    converted_content
-                                )
-                                converted_content_io.name = (
-                                    f"converted_{file_name}"
-                                )
-                                uploaded = g_client.upload(converted_content_io)
-
-                                if uploaded:
-                                    await message.answer(
-                                        "File uploaded successfully to Garmin Connect!"
-                                    )
-                            except garth.exc.GarthHTTPError as e:
-                                await message.answer_document(
-                                    BufferedInputFile(
-                                        converted_content,
-                                        filename=f"converted_{file_name}",
-                                    ),
-                                    caption="Something is wrong with uploading. Here is your converted TCX file.",
-                                )
-
-                        except Exception as e:
-                            _LOGGER.error(
-                                f"Error during conversion of {tcx_file}: {e}"
-                            )
-                            await message.answer(
-                                f"An error occurred while converting the file {tcx_file}. Please try again."
-                            )
-
-    except zipfile.BadZipFile:
-        await message.answer(
-            "The file you sent is not a valid ZIP file. Please send a valid ZIP archive."
-        )
-    except Exception as e:
-        _LOGGER.error(f"Error processing ZIP file: {e}")
-        await message.answer(
-            "An unexpected error occurred while processing the ZIP file. Please try again."
-        )
-
-
 @dp.message()
 async def echo_handler(message: types.Message) -> None:
     """
     Handler will forward receive a message back to the sender
     By default, message handler will handle all message types (like a text, photo, sticker etc.)
     """
-    try:
-        # Send a copy of the received message
-        await message.answer(
-            "Nice try, but I can handle only TCX files for now. Try sending a TCX file instead!"
-        )
-        # await message.send_copy(chat_id=message.chat.id)
-    except TypeError:
-        # But not all the types is supported to be copied so need to handle it
-        await message.answer("Nice try!")
+    await message.answer("😋")
 
 
 async def main() -> None:

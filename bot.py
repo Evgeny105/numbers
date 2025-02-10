@@ -82,23 +82,24 @@ async def get_new_task(message: Message, state: FSMContext) -> None:
         user_name=message.from_user.full_name,
     )
     await message.answer(
-        ("Реши-ка вот такой пример: \n" f"<code>{expression}</code>")
+        "🔔 Внимание-внимание! Новый примерчик! 🔔\n"
+        f"<code>{expression}</code>\n"
+        "Скорее пиши ответ! ⏱️"
     )
     await state.set_state(UserStates.await_1_answer)
 
 
 @dp.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
-    """
-    This handler receives messages with /start command.
-    """
     data = await state.get_data()
     difficulty = data.get("difficulty")
     if difficulty is None:
         await message.answer(
-            f"Привет, {hbold(message.from_user.full_name)}! \n"
-            "Я твой помощник в улучшении оценок по математике 😜\n\n"
-            "Сейчас для тебя будут придумываться примеры простого уровня, но если они окажутся слишком простыми, то я подстроюсь под твой уровень 😉"
+            f"Приветик, {hbold(message.from_user.full_name)}! 🌟\n"
+            "Я твой весёлый помощник в мире цифр и примеров! 🚀\n\n"
+            "Давай начнём с простеньких примеров, а если ты будешь щёлкать их как орешки, "
+            "я подкину тебе задачки посложнее! 😉\n"
+            "Готов стать суперзвездой математики? 💫"
         )
         await state.update_data(difficulty=0)
         _LOGGER.info(
@@ -106,13 +107,12 @@ async def start_handler(message: Message, state: FSMContext) -> None:
         )
     else:
         await message.answer(
-            f"Привет, {hbold(message.from_user.full_name)}! \n"
-            f"Сейчас мы с тобой работаем на уровне сложности: {difficulty}"
+            f"Снова здравствуй, {hbold(message.from_user.full_name)}! 🌈\n"
+            f"Сейчас мы играем на уровне сложности: {difficulty} ⚡️"
         )
         _LOGGER.info(
             f"Повторный запуск: {message.from_user.full_name}, id: {message.from_user.id}"
         )
-    # await state.set_state(UserStates.solved)
     await state.update_data(user_name=message.from_user.full_name)
     await get_new_task(message, state)
 
@@ -126,8 +126,11 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
         right_answer = data.get("answer")
         if ans == right_answer:
             await message.answer(("🤩"))
+            await message.answer(("🎉 УРА!!! 🎉"))
             await message.answer(
-                "Вау! Верно с первой попытки! 😎\n Это на 5 с плюсом!"
+                "Ты справился с ПЕРВОЙ попытки! 🌟\n"
+                "Это точно золотая медаль! 🏆\n"
+                "Следующий уровень через... щас придумаю! 😄"
             )
             _LOGGER.info(
                 f"Пользователь {message.from_user.full_name} решил пример с первой попытки"
@@ -136,12 +139,12 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
             await get_new_task(message, state)
         else:
             await message.answer(
-                (
-                    "Нет, это не верно 😢\n"
-                    "Проверь свои вычисления и попробуй еще раз, у тебя всё получится!\n"
-                    "Повторяю пример:\n"
-                    f"<code>{data.get('expression')}</code>\n"
-                )
+                "Ой-ой-ой! 🫢\n"
+                "Кажется, тут маленькая ошибка! 🧐\n"
+                "Проверь аккуратненько и попробуй ещё раз!\n"
+                "Вот наш пример:\n"
+                f"<code>{data.get('expression')}</code>\n"
+                "Ты обязательно справишься! 💪"
             )
             await state.set_state(UserStates.await_2_answer)
             _LOGGER.info(
@@ -149,10 +152,9 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
             )
     except:
         await message.answer(
-            "Это все конечно хорошо, но в ответ мне нужны только цифры 😋"
-        )
-        _LOGGER.info(
-            f"Пользователь {message.from_user.full_name} написал не цифры в ответ"
+            "Циферки-циферки! 🔢\n"
+            "Давай только числа, как настоящие математики! 🧮\n"
+            "Попробуй ещё разок! 😊"
         )
         return
 
@@ -166,7 +168,9 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
         reight_answer = data.get("answer")
         if ans == reight_answer:
             await message.answer(
-                "Верно со второй попытки! 😎\n Это на 4 с плюсом!"
+                "🎈 Ура! Получилось! 🎈\n"
+                "Со второй попытки - это круто! 😎\n"
+                "Твоя награда - серебряная звёздочка! ⭐️"
             )
             _LOGGER.info(
                 f"Пользователь {message.from_user.full_name} решил пример со второй попытки"
@@ -175,23 +179,17 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
             await get_new_task(message, state)
         else:
             await message.answer(
-                (
-                    "К сожалению, это не верно 😢\n"
-                    "Проверь еще раз где-то спряталась ошибка ты её найдешь и мы победим!\n"
-                    "Повторяю пример:\n"
-                    f"<code>{data.get('expression')}</code>\n"
-                )
+                "Хм-м... 🤔\n"
+                "Опять маленькая помарка! 🎨\n"
+                "Давай посмотрим внимательнее:\n"
+                f"<code>{data.get('expression')}</code>\n"
+                "Ты почти у цели! 🌈"
             )
             await state.set_state(UserStates.await_3_answer)
-            _LOGGER.info(
-                f"Пользователь {message.from_user.full_name} ошибся второй раз"
-            )
     except:
         await message.answer(
-            "Это все конечно хорошо, но в ответ мне нужны только цифры 😋"
-        )
-        _LOGGER.info(
-            f"Пользователь {message.from_user.full_name} написал не цифры в ответ"
+            "Вижу буквы... а надо цифры! 🔤➡️🔢\n"
+            "Попробуй написать просто число, как мы договаривались! 🤝"
         )
         return
 
@@ -205,56 +203,47 @@ async def answer3_handler(message: Message, state: FSMContext) -> None:
         reight_answer = data.get("answer")
         if ans == reight_answer:
             await message.answer(
-                "Верно с третьей попытки! 😎\n Ура! Это так здорово что у тебя получилось! 🎆🎆🎆"
-            )
-            _LOGGER.info(
-                f"Пользователь {message.from_user.full_name} решил пример с третьей попытки"
+                "🎆 ФАНФАРЫ! 🎇\n"
+                "С третьей попытки - это победа! 🏁\n"
+                "Ты настоящий упорный боец! 💥"
             )
             await add_points(state)
             await get_new_task(message, state)
         else:
-            await message.answer(("😢"))
+            await message.answer(("🫂 Не грусти!"))
             await message.answer(
-                "Похоже это очень трудный для тебя пример?\n"
-                f"Не расстраивайся, верный ответ был: <b>{reight_answer}</b>\n"
-                "Давай попробуем другой..."
-            )
-            _LOGGER.info(
-                f"Пользователь {message.from_user.full_name} ошибся третий раз и получил новый пример"
+                "Этот пример был слишком хитрющим! 🦊\n"
+                f"Правильный ответ: <b>{reight_answer}</b>\n"
+                "Давай возьмём новый пример - он точно по зубам! 😉\n"
+                "Уже бегу искать... 🏃♂️"
             )
             await subtract_points(state)
             await get_new_task(message, state)
-            await state.set_state(UserStates.await_1_answer)
     except:
         await message.answer(
-            "Это все конечно хорошо, но в ответ мне нужны только цифры 😋"
-        )
-        _LOGGER.info(
-            f"Пользователь {message.from_user.full_name} написал не цифры в ответ"
+            "Кажется, кто-то хочет поиграть в загадки? 🎭\n"
+            "Но мне нужно именно число - давай попробуем ещё раз! 🤗"
         )
         return
 
 
 @dp.message(Command("stop"))
 async def stop_handler(message: Message, state: FSMContext) -> None:
-    """
-    This handler receives messages with /stop command.
-    """
     try:
         await state.clear()
     finally:
         await message.answer(
-            f"Пока, {hbold(message.from_user.full_name)}... \n"
-            "Я забыл все данные о тебе... \n 😢"
+            f"Пока-пока, {hbold(message.from_user.full_name)}! 👋\n"
+            "Я бережно записываю твои успехи... шучу, забыл всё! 🤫\n"
+            "Возвращайся скорее, будем играть ещё! 🎮"
         )
 
 
 @dp.message()
 async def echo_handler(message: types.Message) -> None:
-    """
-    By default, message handler will handle all message types (like a text, photo, sticker etc.)
-    """
-    await message.answer("😋")
+    await message.answer(
+        "🤖 Я понимаю только числовые ответы, давай играть! 🎲"
+    )
 
 
 async def main() -> None:

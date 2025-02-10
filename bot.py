@@ -117,6 +117,21 @@ async def start_handler(message: Message, state: FSMContext) -> None:
     await get_new_task(message, state)
 
 
+@dp.message(Command("stop"))
+async def stop_handler(message: Message, state: FSMContext) -> None:
+    try:
+        await state.clear()
+    finally:
+        await message.answer(
+            f"Пока-пока, {hbold(message.from_user.full_name)}! 👋\n"
+            "Я бережно записываю твои успехи... шучу, забыл всё! 🤫\n"
+            "Возвращайся скорее, будем играть ещё! 🎮"
+        )
+        _LOGGER.info(
+            f"Пользователь {message.from_user.full_name} завершил работу с ботом"
+        )
+
+
 @dp.message(UserStates.await_1_answer)
 async def answer1_handler(message: Message, state: FSMContext) -> None:
     ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
@@ -225,18 +240,6 @@ async def answer3_handler(message: Message, state: FSMContext) -> None:
             "Но мне нужно именно число - давай попробуем ещё раз! 🤗"
         )
         return
-
-
-@dp.message(Command("stop"))
-async def stop_handler(message: Message, state: FSMContext) -> None:
-    try:
-        await state.clear()
-    finally:
-        await message.answer(
-            f"Пока-пока, {hbold(message.from_user.full_name)}! 👋\n"
-            "Я бережно записываю твои успехи... шучу, забыл всё! 🤫\n"
-            "Возвращайся скорее, будем играть ещё! 🎮"
-        )
 
 
 @dp.message()

@@ -157,6 +157,8 @@ def generate(difficulty):
                 pass
         except:
             break
+    if str(expr.expr).startswith("(") and str(expr.expr).endswith(")"):
+        expr.expr = str(expr.expr)[1:-1]
     str_expr = str(expr.expr).replace("/", "∶").replace("*", "×") + " = ?"
     _LOGGER.info(f"Пример: {str_expr}")
     _LOGGER.info(f"Ответ: {expr.value}")

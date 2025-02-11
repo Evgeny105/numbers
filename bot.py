@@ -22,7 +22,12 @@ from states import UserStates
 from gen import generate
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+LOG_LEVEL = getenv("LOG_LEVEL", "INFO")
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
 _LOGGER = logging.getLogger(__name__)
 
 # Initialize the Bot and Dispatcher
@@ -135,9 +140,9 @@ async def stop_handler(message: Message, state: FSMContext) -> None:
 @dp.message(UserStates.await_1_answer)
 async def answer1_handler(message: Message, state: FSMContext) -> None:
     ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
+    data = await state.get_data()
     try:
         ans = float(ans)
-        data = await state.get_data()
         right_answer = data.get("answer")
         if ans == right_answer:
             await message.answer(("🤩"))
@@ -169,7 +174,9 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
         await message.answer(
             "Циферки-циферки! 🔢\n"
             "Давай только числа, как настоящие математики! 🧮\n"
-            "Попробуй ещё разок! 😊"
+            "Попробуй ещё разок! 😊\n"
+            "Вот наш пример:\n"
+            f"<code>{data.get('expression')}</code>\n"
         )
         return
 
@@ -177,9 +184,9 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
 @dp.message(UserStates.await_2_answer)
 async def answer2_handler(message: Message, state: FSMContext) -> None:
     ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
+    data = await state.get_data()
     try:
         ans = float(ans)
-        data = await state.get_data()
         reight_answer = data.get("answer")
         if ans == reight_answer:
             await message.answer(
@@ -203,8 +210,10 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
             await state.set_state(UserStates.await_3_answer)
     except:
         await message.answer(
-            "Вижу буквы... а надо цифры! 🔤➡️🔢\n"
-            "Попробуй написать просто число, как мы договаривались! 🤝"
+            "Ой, это что ли буквы?... а надо цифры! 🔤➡️🔢\n"
+            "Попробуй написать просто число, как мы договаривались! 🤝\n"
+            "Вот наш пример:\n"
+            f"<code>{data.get('expression')}</code>\n"
         )
         return
 
@@ -212,9 +221,9 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
 @dp.message(UserStates.await_3_answer)
 async def answer3_handler(message: Message, state: FSMContext) -> None:
     ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
+    data = await state.get_data()
     try:
         ans = float(ans)
-        data = await state.get_data()
         reight_answer = data.get("answer")
         if ans == reight_answer:
             await message.answer(
@@ -230,14 +239,16 @@ async def answer3_handler(message: Message, state: FSMContext) -> None:
                 "Этот пример был слишком хитрющим! 🦊\n"
                 f"Правильный ответ: <b>{reight_answer}</b>\n"
                 "Давай возьмём новый пример - он точно по зубам! 😉\n"
-                "Уже бегу искать... 🏃♂️"
+                "Уже бегу искать... 🏃"
             )
             await subtract_points(state)
             await get_new_task(message, state)
     except:
         await message.answer(
             "Кажется, кто-то хочет поиграть в загадки? 🎭\n"
-            "Но мне нужно именно число - давай попробуем ещё раз! 🤗"
+            "Но мне нужно именно число - давай попробуем ещё раз! 🤗\n"
+            "Вот наш пример:\n"
+            f"<code>{data.get('expression')}</code>\n"
         )
         return
 

@@ -1,14 +1,18 @@
+"""
+Telegram бот для тренировки устного счёта у учеников 3-го класса.
+
+Бот генерирует математические примеры с адаптивной сложностью,
+предоставляет три попытки на каждый пример и систему баллов.
+"""
+
 import asyncio
-import datetime
-import io
 import logging
-import re
-from datetime import datetime, timedelta
 from itertools import repeat
 from os import getenv
+from typing import TypedDict, cast
 
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.client.bot import DefaultBotProperties
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -16,14 +20,17 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.methods import SendMessage
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import BufferedInputFile, Message, User
 from aiogram.utils.markdown import hbold
 
 from gen import generate
 from redis_handlers import init_redis
 from states import UserStates
 
-# Set up logging
+# ============================================================================
+# Конфигурация логирования
+# ============================================================================
+
 LOG_LEVEL = getenv("LOG_LEVEL", "INFO")
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -32,73 +39,177 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-# Initialize the Bot and Dispatcher
+# ============================================================================
+# Типизация данных пользователя
+# ============================================================================
+
+
+class UserData(TypedDict):
+    """
+    Структура данных, сохраняемых в FSM для каждого пользователя.
+
+    Attributes:
+        difficulty: Уровень сложности (0-4, инвертированная шкала: 0=сложный, 4=простой)
+        points: Количество баллов пользователя (0-49, влияет на сложность)
+        expression: Текущее математическое выражение
+        answer: Правильный ответ на текущий пример
+        user_name: Полное имя пользователя из Telegram
+    """
+
+    difficulty: int
+    points: int
+    expression: str
+    answer: int
+    user_name: str
+
+
+# ============================================================================
+# Инициализация бота и диспетчера
+# ============================================================================
+
 TOKEN_API = getenv("TOKEN_API_BOT")
+
+# Инициализация хранилища: Redis с fallback на MemoryStorage
 try:
-    storage: RedisStorage = init_redis()
+    storage: RedisStorage | MemoryStorage = init_redis()
 except Exception as e:
     _LOGGER.error(f"Redis initialization failed: {e}")
     storage = MemoryStorage()
     _LOGGER.warning("Using MemoryStorage instead of Redis")
+
 dp = Dispatcher(storage=storage)
 
 
-# Concurently version of the message.answer method
-async def message_answer(message: Message, text: str) -> SendMessage:
+# ============================================================================
+# Вспомогательные функции
+# ============================================================================
+
+
+async def message_answer(message: Message, text: str) -> Message:
+    """
+    Отправляет сообщение пользователю.
+
+    Обёртка для асинхронного отправления сообщений.
+
+    Args:
+        message: Объект сообщения от пользователя
+        text: Текст для отправки
+
+    Returns:
+        Отправленное сообщение
+    """
     return await message.answer(text)
 
 
 async def add_points(state: FSMContext) -> None:
+    """
+    Увеличивает количество баллов пользователя на 1.
+
+    Баллы ограничены диапазоном [0, 49]. При достижении каждого следующего
+    уровня сложности (каждые 10 баллов) уровень сложности увеличивается.
+
+    Args:
+        state: Контекст состояния FSM пользователя
+    """
     try:
-        data = await state.get_data()
-        points = data.get("points", 0)
-        user_name = data.get("user_name", "Unknown")
+        data: UserData = cast(UserData, await state.get_data())
+        points: int = data.get("points", 0)
+        user_name: str = data.get("user_name", "Unknown")
+
+        # Увеличиваем баллы с ограничением
         points += 1
         points = min(points, 49)
         points = max(points, 0)
-        difficulty = points // 10
+
+        # Пересчитываем уровень сложности
+        difficulty: int = points // 10
+
         _LOGGER.info(
             f"Пользователь {user_name} справился и получил {points} баллов."
         )
+
+        # Используем asyncio.create_task для неблокирующего обновления
         asyncio.create_task(
             state.update_data(difficulty=difficulty, points=points)
         )
-    except:
-        _LOGGER.error("Ошибка при добавлении баллов")
+    except Exception as e:
+        _LOGGER.error(f"Ошибка при добавлении баллов: {e}")
+        # Сбрасываем в дефолтные значения при ошибке
         asyncio.create_task(state.update_data(difficulty=0, points=0))
 
 
 async def subtract_points(state: FSMContext) -> None:
+    """
+    Уменьшает количество баллов пользователя на 1.
+
+    Баллы ограничены диапазоном [0, 49]. При уменьшении баллов уровень
+    сложности может понизиться.
+
+    Args:
+        state: Контекст состояния FSM пользователя
+    """
     try:
-        data = await state.get_data()
-        points = data.get("points", 1)
-        user_name = data.get("user_name", "Unknown")
+        data: UserData = cast(UserData, await state.get_data())
+        points: int = data.get("points", 1)
+        user_name: str = data.get("user_name", "Unknown")
+
+        # Уменьшаем баллы с ограничением
         points -= 1
         points = min(points, 49)
         points = max(points, 0)
-        difficulty = points // 10
+
+        # Пересчитываем уровень сложности
+        difficulty: int = points // 10
+
         _LOGGER.info(
             f"Пользователь {user_name} не справился и получил {points} баллов."
         )
+
+        # Используем asyncio.create_task для неблокирующего обновления
         asyncio.create_task(
             state.update_data(difficulty=difficulty, points=points)
         )
-    except:
-        _LOGGER.error("Ошибка при вычитании баллов")
+    except Exception as e:
+        _LOGGER.error(f"Ошибка при вычитании баллов: {e}")
+        # Сбрасываем в дефолтные значения при ошибке
         asyncio.create_task(state.update_data(difficulty=0, points=0))
 
 
 async def get_new_task(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    difficulty = data.get("difficulty", 0)
+    """
+    Генерирует и отправляет пользователю новый математический пример.
+
+    Функция генерирует пример в соответствии с текущим уровнем сложности,
+    сохраняет его в состояние пользователя и отправляет сообщение с примером.
+
+    Args:
+        message: Объект сообщения от пользователя
+        state: Контекст состояния FSM пользователя
+    """
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
+    data: UserData = cast(UserData, await state.get_data())
+    difficulty: int = data.get("difficulty", 0)
+
+    # Генерируем новый пример
+    expression: str
+    answer: int
     expression, answer = generate(difficulty)
+
+    # Сохраняем данные о примере в состоянии
     asyncio.create_task(
         state.update_data(
             expression=expression,
             answer=answer,
-            user_name=message.from_user.full_name,
+            user_name=user.full_name,
         )
     )
+
+    # Отправляем сообщение с примером
     asyncio.create_task(
         message_answer(
             message,
@@ -107,68 +218,136 @@ async def get_new_task(message: Message, state: FSMContext) -> None:
             "Скорее пиши ответ! ⏱️",
         )
     )
+
+    # Переводим пользователя в состояние ожидания первого ответа
     asyncio.create_task(state.set_state(UserStates.await_1_answer))
+
+
+# ============================================================================
+# Обработчики команд
+# ============================================================================
 
 
 @dp.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    difficulty = data.get("difficulty")
+    """
+    Обработчик команды /start.
+
+    Приветствует пользователя (нового или возвращающегося) и начинает игру.
+    Для новых пользователей выводит приветственное сообщение,
+    для возвращающихся - информацию о текущем прогрессе.
+
+    Args:
+        message: Объект сообщения с командой /start
+        state: Контекст состояния FSM пользователя
+    """
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
+    data: UserData = cast(UserData, await state.get_data())
+    difficulty: int | None = data.get("difficulty")
+
     if difficulty is None:
+        # Новый пользователь
         await message_answer(
             message,
-            f"Приветик, {hbold(message.from_user.full_name)}! 🌟\n"
+            f"Приветик, {hbold(user.full_name)}! 🌟\n"
             "Я твой весёлый помощник в мире вычислений! 🚀\n\n"
             "Давай начнём с простеньких примеров, а если ты будешь щёлкать их как орешки, "
             "я подкину тебе задачки посложнее! 😉\n"
             "Со мной будешь суперзвездой математики! 💫",
         )
         asyncio.create_task(state.update_data(difficulty=0))
-        _LOGGER.info(
-            f"Новый пользователь: {message.from_user.full_name}, id: {message.from_user.id}"
-        )
+        _LOGGER.info(f"Новый пользователь: {user.full_name}, id: {user.id}")
     else:
+        # Возвращающийся пользователь
         await message_answer(
             message,
-            f"Снова здравствуй, {hbold(message.from_user.full_name)}! 🌈\n"
+            f"Снова здравствуй, {hbold(user.full_name)}! 🌈\n"
             f"Сейчас мы с тобой на уровне сложности: {difficulty} ⚡️",
         )
-        _LOGGER.info(
-            f"Повторный запуск: {message.from_user.full_name}, id: {message.from_user.id}"
-        )
-    asyncio.create_task(
-        state.update_data(user_name=message.from_user.full_name)
-    )
+        _LOGGER.info(f"Повторный запуск: {user.full_name}, id: {user.id}")
+
+    # Обновляем имя пользователя и начинаем игру
+    asyncio.create_task(state.update_data(user_name=user.full_name))
     asyncio.create_task(get_new_task(message, state))
 
 
 @dp.message(Command("stop"))
 async def stop_handler(message: Message, state: FSMContext) -> None:
+    """
+    Обработчик команды /stop.
+
+    Очищает состояние пользователя и отправляет прощальное сообщение.
+
+    Args:
+        message: Объект сообщения с командой /stop
+        state: Контекст состояния FSM пользователя
+    """
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
     try:
         await state.clear()
     finally:
         asyncio.create_task(
             message_answer(
                 message,
-                f"Пока-пока, {hbold(message.from_user.full_name)}! 👋\n"
+                f"Пока-пока, {hbold(user.full_name)}! 👋\n"
                 "Я бережно записываю твои успехи... шучу, забыл всё! 🤫\n"
                 "Возвращайся скорее, будем играть ещё! 🎮",
             )
         )
-        _LOGGER.info(
-            f"Пользователь {message.from_user.full_name} завершил работу с ботом"
-        )
+        _LOGGER.info(f"Пользователь {user.full_name} завершил работу с ботом")
+
+
+# ============================================================================
+# Обработчики ответов пользователя
+# ============================================================================
 
 
 @dp.message(UserStates.await_1_answer)
 async def answer1_handler(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    try:
-        ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
-        ans = float(ans)
-        right_answer = data.get("answer")
-        if ans == right_answer:
+    """
+    Обработчик первой попытки ответа.
 
+    Проверяет ответ пользователя на правильность и:
+    - Если верно: поздравляет, добавляет баллы, генерирует новый пример
+    - Если неверно: предлагает попробовать ещё раз, переводит во вторую попытку
+    - Если некорректный ввод: просит ввести число
+
+    Args:
+        message: Объект сообщения с ответом пользователя
+        state: Контекст состояния FSM пользователя
+    """
+    # Безопасное получение текста сообщения
+    text: str | None = message.text
+    if not text:
+        _LOGGER.error("Сообщение без текста")
+        return
+
+    data: UserData = cast(UserData, await state.get_data())
+
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
+    try:
+        # Нормализуем ввод: убираем пробелы, заменяем запятую на точку, равно на минус
+        ans_str: str = text.replace(" ", "").replace(",", ".").replace("=", "-")
+        ans: float = float(ans_str)
+        right_answer: int = data.get("answer", 0)
+
+        if ans == right_answer:
+            # Правильный ответ с первой попытки - золотая медаль!
             messages = [
                 "🤩",
                 "🎉 УРА!!! 🎉",
@@ -178,11 +357,12 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
                 *map(message_answer, repeat(message), messages)
             )
             _LOGGER.info(
-                f"Пользователь {message.from_user.full_name} решил пример с первой попытки"
+                f"Пользователь {user.full_name} решил пример с первой попытки"
             )
             await add_points(state)
             asyncio.create_task(get_new_task(message, state))
         else:
+            # Неправильный ответ - даём вторую попытку
             asyncio.create_task(
                 message_answer(
                     message,
@@ -195,10 +375,9 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
                 )
             )
             asyncio.create_task(state.set_state(UserStates.await_2_answer))
-            _LOGGER.info(
-                f"Пользователь {message.from_user.full_name} ошибся первый раз"
-            )
-    except:
+            _LOGGER.info(f"Пользователь {user.full_name} ошибся первый раз")
+    except (ValueError, TypeError):
+        # Некорректный ввод - не число
         asyncio.create_task(
             message_answer(
                 message,
@@ -214,12 +393,39 @@ async def answer1_handler(message: Message, state: FSMContext) -> None:
 
 @dp.message(UserStates.await_2_answer)
 async def answer2_handler(message: Message, state: FSMContext) -> None:
-    ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
-    data = await state.get_data()
+    """
+    Обработчик второй попытки ответа.
+
+    Проверяет ответ пользователя на правильность и:
+    - Если верно: поздравляет, добавляет баллы, генерирует новый пример
+    - Если неверно: предлагает попробовать ещё раз, переводит в третью попытку
+    - Если некорректный ввод: просит ввести число
+
+    Args:
+        message: Объект сообщения с ответом пользователя
+        state: Контекст состояния FSM пользователя
+    """
+    # Безопасное получение текста сообщения
+    text: str | None = message.text
+    if not text:
+        _LOGGER.error("Сообщение без текста")
+        return
+
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
+    ans_str: str = text.replace(" ", "").replace(",", ".").replace("=", "-")
+    data: UserData = cast(UserData, await state.get_data())
+
     try:
-        ans = float(ans)
-        right_answer = data.get("answer")
+        ans: float = float(ans_str)
+        right_answer: int = data.get("answer", 0)
+
         if ans == right_answer:
+            # Правильный ответ со второй попытки - серебряная медалька
             await message_answer(
                 message,
                 "🎈 Ура! Получилось! 🎈\n"
@@ -227,11 +433,12 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
                 "Твоя награда - серебряная медалька! 🥈",
             )
             _LOGGER.info(
-                f"Пользователь {message.from_user.full_name} решил пример со второй попытки"
+                f"Пользователь {user.full_name} решил пример со второй попытки"
             )
             await add_points(state)
             asyncio.create_task(get_new_task(message, state))
         else:
+            # Неправильный ответ - даём третью и последнюю попытку
             await message_answer(
                 message,
                 "Хм-м... 🤔\n"
@@ -241,7 +448,8 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
                 "Ты почти у цели! 🌈",
             )
             asyncio.create_task(state.set_state(UserStates.await_3_answer))
-    except:
+    except (ValueError, TypeError):
+        # Некорректный ввод - не число
         asyncio.create_task(
             message_answer(
                 message,
@@ -256,12 +464,39 @@ async def answer2_handler(message: Message, state: FSMContext) -> None:
 
 @dp.message(UserStates.await_3_answer)
 async def answer3_handler(message: Message, state: FSMContext) -> None:
-    ans = message.text.replace(" ", "").replace(",", ".").replace("=", "-")
-    data = await state.get_data()
+    """
+    Обработчик третьей (последней) попытки ответа.
+
+    Проверяет ответ пользователя на правильность и:
+    - Если верно: поздравляет, добавляет баллы, генерирует новый пример
+    - Если неверно: показывает правильный ответ, вычитает баллы, генерирует новый пример
+    - Если некорректный ввод: просит ввести число
+
+    Args:
+        message: Объект сообщения с ответом пользователя
+        state: Контекст состояния FSM пользователя
+    """
+    # Безопасное получение текста сообщения
+    text: str | None = message.text
+    if not text:
+        _LOGGER.error("Сообщение без текста")
+        return
+
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
+    ans_str: str = text.replace(" ", "").replace(",", ".").replace("=", "-")
+    data: UserData = cast(UserData, await state.get_data())
+
     try:
-        ans = float(ans)
-        reight_answer = data.get("answer")
-        if ans == reight_answer:
+        ans: float = float(ans_str)
+        right_answer: int = data.get("answer", 0)
+
+        if ans == right_answer:
+            # Правильный ответ с третьей попытки - победа!
             await message_answer(
                 message,
                 "🎆 ФАНФАРЫ! 🎇\n"
@@ -271,17 +506,19 @@ async def answer3_handler(message: Message, state: FSMContext) -> None:
             await add_points(state)
             asyncio.create_task(get_new_task(message, state))
         else:
+            # Неправильный ответ с третьей попытки - показываем ответ и вычитаем баллы
             await message_answer(message, "🫂 Не грусти!")
             await message_answer(
                 message,
                 "Этот пример был слишком хитрющим! 🦊\n"
-                f"Правильный ответ: <b>{reight_answer}</b>\n"
+                f"Правильный ответ: <b>{right_answer}</b>\n"
                 "Давай возьмём новый пример - он точно по зубам! 😉\n"
                 "Уже бегу искать... 🏃",
             )
             await subtract_points(state)
             asyncio.create_task(get_new_task(message, state))
-    except:
+    except (ValueError, TypeError):
+        # Некорректный ввод - не число
         asyncio.create_task(
             message_answer(
                 message,
@@ -294,28 +531,63 @@ async def answer3_handler(message: Message, state: FSMContext) -> None:
         return
 
 
+# ============================================================================
+# Fallback обработчик
+# ============================================================================
+
+
 @dp.message()
 async def echo_handler(message: types.Message) -> None:
+    """
+    Fallback-обработчик для всех остальных сообщений.
+
+    Активируется, когда пользователь отправляет сообщение, не соответствующее
+    ни одному из ожидаемых состояний.
+
+    Args:
+        message: Объект сообщения от пользователя
+    """
+    # Безопасное получение пользователя
+    user: User | None = message.from_user
+    if not user:
+        _LOGGER.error("Сообщение без пользователя")
+        return
+
     asyncio.create_task(
         message_answer(
             message,
             "🤖 Я понимаю только числовые ответы, давай играть! 🎲\nДля начала используй команду /start",
         )
     )
-    _LOGGER.info(
-        f"Пользователь {message.from_user.full_name} написал какую-то дичь"
-    )
+    _LOGGER.info(f"Пользователь {user.full_name} написал какую-то дичь")
+
+
+# ============================================================================
+# Точка входа
+# ============================================================================
 
 
 async def main() -> None:
-    # Initialize Bot instance with a default parse mode which will be passed to all API calls
+    """
+    Главная функция для запуска бота.
+
+    Инициализирует экземпляр бота с дефолтным режимом парсинга HTML
+    и начинает поллинг обновлений от Telegram.
+    """
+    # Проверяем наличие токена
+    if not TOKEN_API:
+        _LOGGER.error("TOKEN_API_BOT environment variable is not set")
+        raise ValueError("TOKEN_API_BOT environment variable is not set")
+
+    # Инициализируем бота с HTML-режимом парсинга
     bot = Bot(
         TOKEN_API, default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     try:
-        # Start polling for updates
+        # Запускаем поллинг обновлений от Telegram
         await dp.start_polling(bot)
     finally:
+        # Закрываем сессию бота при завершении работы
         await bot.session.close()
 
 

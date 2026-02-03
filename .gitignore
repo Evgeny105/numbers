@@ -1,3 +1,4 @@
 .env
 *.pyc
 project_code.txt
+.vscode/

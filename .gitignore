@@ -9,3 +9,8 @@ project_code.txt
 .pytest_cache/
 data/
 tools/*.session
+
+# Planning and agent tooling: useful locally, but they describe the
+# deployment topology and are not needed to run the project.
+openspec/
+.claude/

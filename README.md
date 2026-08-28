@@ -11,9 +11,6 @@
 - **Реплики:** LM Studio по LAN, OpenRouter через прокси как резерв
 - **Деплой:** Docker Compose на домашнем сервере, Telegram через xray-прокси
 
-Планирование ведётся в [OpenSpec](https://github.com/Fission-AI/OpenSpec) —
-`openspec/`.
-
 ## Как это работает
 
 ### Примеры

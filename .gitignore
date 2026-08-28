@@ -1,4 +1,9 @@
 .env
 *.pyc
+__pycache__/
 project_code.txt
 .vscode/
+.venv/
+.pytest_cache/
+data/
+tools/*.session

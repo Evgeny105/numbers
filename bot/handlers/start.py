@@ -22,6 +22,17 @@ _LOGGER = logging.getLogger(__name__)
 PROFILE_CALLBACK_PREFIX = "profile:"
 
 
+async def _celebrate(message: Message, phrases: PhraseService, category: str) -> None:
+    """A lone emoji, rendered large by Telegram. Never worth failing over."""
+    emoji = phrases.celebration(category)
+    if not emoji:
+        return
+    try:
+        await message.answer(emoji)
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.info("could not send the celebration emoji: %s", exc)
+
+
 async def _try(awaitable, what: str) -> bool:
     """Run a cosmetic Telegram call, logging rather than raising on failure."""
     try:
@@ -67,6 +78,7 @@ async def start_handler(
     if not progress.profile:
         greeting = await phrases.get(texts.GREETING_NEW, user.id)
         await message.answer(f"{greeting.text}\n\nРад знакомству, <b>{name}</b>!")
+        await _celebrate(message, phrases, texts.GREETING_NEW)
         await db.record_event(user.id, "session_start", {"kind": "first"})
         await ask_for_profile(message, state)
         return
@@ -137,6 +149,7 @@ async def stop_handler(
     await message.answer(
         f"{farewell.text}\n\nТвои успехи я запомнил — /start, и продолжим."
     )
+    await _celebrate(message, phrases, texts.FAREWELL)
     _LOGGER.info("user %s stopped the session", user.id)
 
 

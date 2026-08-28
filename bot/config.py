@@ -140,7 +140,7 @@ class Settings:
             phrase_pool_target=_int("PHRASE_POOL_TARGET", 10),
             phrase_pool_max=_int("PHRASE_POOL_MAX", 40),
             phrase_max_length=_int("PHRASE_MAX_LENGTH", 160),
-            phrase_max_emoji=_int("PHRASE_MAX_EMOJI", 4),
+            phrase_max_emoji=_int("PHRASE_MAX_EMOJI", 6),
             phrase_generate_retries=_int("PHRASE_GENERATE_RETRIES", 3),
             throttle_messages=_int("THROTTLE_MESSAGES", 5),
             throttle_window_seconds=_float("THROTTLE_WINDOW_SECONDS", 3.0),

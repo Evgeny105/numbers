@@ -22,6 +22,20 @@ from bot.storage.db import Database
 
 _LOGGER = logging.getLogger(__name__)
 
+
+async def _celebrate(message: Message, phrases: PhraseService, category: str) -> None:
+    """Send a lone emoji, which Telegram renders large and animates.
+
+    Purely decorative, so a failure here must never interrupt the loop.
+    """
+    emoji = phrases.celebration(category)
+    if not emoji:
+        return
+    try:
+        await message.answer(emoji)
+    except Exception as exc:  # noqa: BLE001 - decoration is never worth an error
+        _LOGGER.info("could not send the celebration emoji: %s", exc)
+
 async def answer_handler(
     message: Message,
     state: FSMContext,
@@ -82,12 +96,15 @@ async def answer_handler(
             score_after=progress.score,
             ms_to_answer=ms_to_answer,
         )
-        phrase = await phrases.get(quiz.category_for_correct(attempt), user.id)
+        category = quiz.category_for_correct(attempt)
+        phrase = await phrases.get(category, user.id)
         await message.answer(phrase.text)
+        await _celebrate(message, phrases, category)
 
         if previous_difficulty is not None and progress.difficulty > previous_difficulty:
             level_up = await phrases.get(texts.LEVEL_UP, user.id)
             await message.answer(f"{level_up.text} (сложность {progress.difficulty})")
+            await _celebrate(message, phrases, texts.LEVEL_UP)
 
         await message.answer(await quiz.issue_problem(state, progress))
         return

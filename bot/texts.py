@@ -84,6 +84,20 @@ CATEGORIES: dict[str, Category] = {
     ),
 }
 
+#: A single emoji sent as its own message renders large in Telegram and plays
+#: an animation, so a win gets a visible little firework rather than another
+#: line of text. Only the celebratory categories get one.
+CELEBRATION_EMOJI: dict[str, tuple[str, ...]] = {
+    CORRECT_1ST: ("🎉", "🥳", "🔥", "💯", "🏆", "⭐", "🚀", "🎊"),
+    CORRECT_2ND: ("🎉", "👍", "😎", "⭐", "🎈", "💪"),
+    CORRECT_3RD: ("🎆", "💪", "🏅", "👏", "🎊"),
+    LEVEL_UP: ("⚡", "🚀", "📈", "🔥"),
+    GREETING_NEW: ("👋",),
+    GREETING_BACK: ("👋",),
+    FAREWELL: ("👋",),
+}
+
+
 STATIC_PHRASES: dict[str, tuple[str, ...]] = {
     CORRECT_1ST: (
         "🎉 УРА!!! С первой попытки — это точно золотая медаль! 🥇",

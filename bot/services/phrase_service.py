@@ -23,7 +23,7 @@ from bot.services.llm import Completion, LLMClient, LLMUnavailable
 from bot.services.validation import validate_phrase
 from bot.storage import phrases as phrase_store
 from bot.storage.db import Database
-from bot.texts import CATEGORIES, STATIC_PHRASES
+from bot.texts import CATEGORIES, CELEBRATION_EMOJI, STATIC_PHRASES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ _SYSTEM_PROMPT = (
     "ребёнку 9-10 лет тренировать устный счёт. Реплики читает ребёнок. "
     "Пиши по-русски, тепло и весело, без сюсюканья и без нравоучений. "
     "Каждая реплика — одна строка длиной до {max_length} символов. "
-    "Разрешено до {max_emoji} эмодзи в реплике. "
+    "Эмодзи приветствуются: ставь 2-4 штуки в реплике, но не больше {max_emoji}. "
     "Категорически нельзя: ссылки, любые теги и угловые скобки, латинские слова, "
     "числа длиннее одной цифры, примеры и знаки арифметики. "
     "Верни ровно {count} реплик, каждую с новой строки, без нумерации и без кавычек."
@@ -91,6 +91,15 @@ class PhraseService:
 
         self.request_refill(category)
         return Phrase(text=self.static(category), source=STATIC_PROVIDER)
+
+    def celebration(self, category: str) -> str | None:
+        """A single emoji to send as its own message, or None for this category.
+
+        Telegram renders a lone emoji large and animates it, so this is a
+        cheap bit of delight that costs no tokens and cannot fail.
+        """
+        options = CELEBRATION_EMOJI.get(category)
+        return self._rng.choice(list(options)) if options else None
 
     def static(self, category: str) -> str:
         """The compiled-in fallback for a category."""

@@ -63,6 +63,13 @@ class TestFirstRun:
 
 
 class TestAnswerLoop:
+    async def test_a_win_is_followed_by_a_lone_animated_emoji(self, harness) -> None:
+        await _start_and_choose(harness)
+        answer = await _current_answer(harness)
+        replies = await harness.send(str(answer))
+        # Telegram only renders an emoji large when it is the entire message.
+        assert any(len(reply.strip()) <= 2 and not reply.strip().isascii() for reply in replies)
+
     async def test_correct_first_attempt_scores_and_moves_on(self, harness) -> None:
         await _start_and_choose(harness)
         answer = await _current_answer(harness)

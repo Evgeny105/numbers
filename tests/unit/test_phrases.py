@@ -154,3 +154,22 @@ class TestParsing:
             "Здорово!",
             "Так держать!",
         ]
+
+
+class TestCelebration:
+    """A lone emoji renders large in Telegram and animates; it must never fail."""
+
+    def test_celebratory_categories_offer_an_emoji(self, tmp_path) -> None:
+        from bot.texts import CORRECT_1ST, CORRECT_2ND, CORRECT_3RD, LEVEL_UP
+
+        service = PhraseService(None, None)  # type: ignore[arg-type]
+        for category in (CORRECT_1ST, CORRECT_2ND, CORRECT_3RD, LEVEL_UP):
+            emoji = service.celebration(category)
+            assert emoji and len(emoji) <= 2
+
+    def test_consoling_categories_get_no_emoji(self) -> None:
+        from bot.texts import INVALID_INPUT, WRONG_FINAL, WRONG_RETRY
+
+        service = PhraseService(None, None)  # type: ignore[arg-type]
+        for category in (WRONG_RETRY, WRONG_FINAL, INVALID_INPUT):
+            assert service.celebration(category) is None

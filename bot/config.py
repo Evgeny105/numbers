@@ -146,7 +146,7 @@ class Settings:
             http_proxy_url=_optional("HTTP_PROXY_URL"),
             log_level=_optional("LOG_LEVEL", "INFO").upper(),
             llm_api_key=_optional("API_KEY_LLM"),
-            lmstudio_base_url=_optional("LMSTUDIO_BASE_URL", "http://<lm-studio-host>:1234/v1"),
+            lmstudio_base_url=_optional("LMSTUDIO_BASE_URL"),
             lmstudio_model=_optional("LMSTUDIO_MODEL", "gigachat3.1-10b-a1.8b"),
             lmstudio_timeout=_float("LMSTUDIO_TIMEOUT", 60.0),
             openrouter_base_url=_optional("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),

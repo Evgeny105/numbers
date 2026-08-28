@@ -5,9 +5,10 @@
 #     (the xray container) on the external network the external proxy network. Verified
 #     from this host: OpenRouter direct returns 403, through the proxy 200.
 #     The container alias `xray` is stable across reboots, unlike an IP.
-#   - LM Studio (<lm-studio-host>:1234) is on the same LAN and is reached directly;
+#   - LM Studio is on the same LAN and is reached directly at LMSTUDIO_BASE_URL;
 #     it must never go through the proxy.
-#   - The dashboard is published on the LAN address only, never 0.0.0.0.
+#   - The dashboard is published on the single LAN address in ADMIN_WEB_BIND,
+#     never on 0.0.0.0.
 #
 # Run: docker compose -f docker-compose.ubuser.yml up -d --build
 services:

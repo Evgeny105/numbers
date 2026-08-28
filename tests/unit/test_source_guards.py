@@ -8,6 +8,7 @@ during a refactor unless something fails loudly.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -77,3 +78,26 @@ def test_no_secrets_are_logged_unmasked(path: Path) -> None:
         for secret in ("bot_token", "api_key", "llm_api_key", "_api_key"):
             if secret in line and "mask" not in line:
                 pytest.fail(f"{path}:{lineno} may log a secret: {line.strip()}")
+
+
+@pytest.mark.parametrize("path", python_files(), ids=str)
+def test_no_private_network_addresses_in_code(path: Path) -> None:
+    """Host addresses are configuration, not literals.
+
+    A repository that names the home network's addresses leaks its layout to
+    anyone who reads it, and pins the project to one particular house.
+    """
+    source = path.read_text(encoding="utf-8")
+    for match in re.finditer(r"\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.[\d.]+", source):
+        pytest.fail(f"{path} contains the private address {match.group(0)}")
+
+
+def test_no_private_network_addresses_in_config_files() -> None:
+    """Same rule for the files a reader looks at first."""
+    pattern = re.compile(r"\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.[\d.]+")
+    for name in (".env.example", "README.md", "docker-compose.yml", "docker-compose.ubuser.yml"):
+        path = Path(name)
+        if not path.exists():
+            continue
+        match = pattern.search(path.read_text(encoding="utf-8"))
+        assert match is None, f"{name} contains the private address {match.group(0)}"

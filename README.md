@@ -82,7 +82,7 @@
 
 ## Админка
 
-`http://<хост>:8080`, HTTP Basic, только из локальной сети.
+`http://<ADMIN_WEB_BIND>:<ADMIN_WEB_PORT>`, HTTP Basic, только из локальной сети.
 
 - **Обзор** — активность по дням, доля верных ответов, список решающих
 - **Пользователи** — итоги по каждому
@@ -130,10 +130,13 @@ docker compose up -d --build
 docker compose -f docker-compose.ubuser.yml up -d --build
 ```
 
-Telegram и OpenRouter идут через контейнер the xray container
-(`http://xray:10809`, внешняя сеть the external proxy network) — напрямую они
-отдают `403`. LM Studio на `<lm-studio-host>:1234` доступна по LAN напрямую и через
-прокси **не** ходит.
+Telegram и OpenRouter идут через контейнер xray (`http://xray:10809`, внешняя
+сеть the external proxy network) — напрямую они отдают `403`. LM Studio задаётся в
+`LMSTUDIO_BASE_URL`, доступна по локальной сети напрямую и через прокси **не**
+ходит.
+
+Адрес, на котором публикуется админка, задаётся `ADMIN_WEB_BIND` — один
+конкретный интерфейс, не `0.0.0.0`.
 
 ## Тесты
 

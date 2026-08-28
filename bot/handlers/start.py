@@ -6,6 +6,7 @@ import html
 import logging
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -19,6 +20,16 @@ from bot.storage.db import Database
 _LOGGER = logging.getLogger(__name__)
 
 PROFILE_CALLBACK_PREFIX = "profile:"
+
+
+async def _try(awaitable, what: str) -> bool:
+    """Run a cosmetic Telegram call, logging rather than raising on failure."""
+    try:
+        await awaitable
+        return True
+    except TelegramBadRequest as exc:
+        _LOGGER.info("could not %s: %s", what, exc)
+        return False
 
 
 def profile_keyboard() -> InlineKeyboardMarkup:
@@ -87,12 +98,24 @@ async def choose_profile(
         user.id, "level_change", {"from": previous.profile or None, "to": key}
     )
 
-    await callback.answer(f"Уровень: {profile.title}")
-    if callback.message is not None and isinstance(callback.message, Message):
-        await callback.message.edit_text(f"Уровень: <b>{profile.title}</b> — {profile.description}")
-        await state.set_state(UserStates.awaiting_answer)
-        progress = quiz.UserProgress(profile=key, difficulty=difficulty, score=previous.score)
-        await callback.message.answer(await quiz.issue_problem(state, progress))
+    # Acknowledging the tap and clearing the keyboard are courtesies. Neither
+    # may stand between the user and their next problem: a callback query that
+    # Telegram considers expired makes both fail, and the choice is already
+    # saved by this point.
+    await _try(callback.answer(f"Уровень: {profile.title}"), "answer callback")
+
+    await state.set_state(UserStates.awaiting_answer)
+    progress = quiz.UserProgress(profile=key, difficulty=difficulty, score=previous.score)
+    problem = await quiz.issue_problem(state, progress)
+
+    if isinstance(callback.message, Message):
+        await _try(
+            callback.message.edit_text(
+                f"Уровень: <b>{profile.title}</b> — {profile.description}"
+            ),
+            "edit the level message",
+        )
+        await callback.message.answer(problem)
 
 
 async def level_handler(message: Message, state: FSMContext) -> None:

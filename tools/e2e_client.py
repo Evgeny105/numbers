@@ -302,7 +302,16 @@ def admin_steps(chat_id: int, admin_id: int) -> list[Step]:
     ]
 
 
-async def run_scenario(chat_id: int, user_id: int, admin_id: int | None, profile: str) -> int:
+async def run_scenario(
+    chat_id: int, user_id: int, admin_id: int | None, profile: str, pace: float = 1.0
+) -> int:
+    """Play the scenario.
+
+    `pace` spaces the steps out. The bot throttles a user who sends faster than
+    a human plausibly types, and the harness must not trip its own defences —
+    so the smoke check runs against the *production* rate limit rather than
+    quietly relaxing it.
+    """
     runtime = await build_runtime()
     state: dict[str, Any] = {}
     failures = 0
@@ -316,6 +325,8 @@ async def run_scenario(chat_id: int, user_id: int, admin_id: int | None, profile
             steps += admin_steps(chat_id, admin_id)
 
         for index, step in enumerate(steps, start=1):
+            if index > 1 and pace:
+                await asyncio.sleep(pace)
             replies = await step.action(runtime, state)
             problem = step.expect(replies, state)
             if problem is None:
@@ -393,6 +404,12 @@ def main() -> None:
     scenario.add_argument("--user-id", type=int)
     scenario.add_argument("--admin-id", type=int, help="Also exercise the admin commands")
     scenario.add_argument("--profile", default="grade4")
+    scenario.add_argument(
+        "--pace",
+        type=float,
+        default=1.0,
+        help="Seconds between steps; must stay under the bot's own rate limit",
+    )
 
     args = parser.parse_args()
 
@@ -404,7 +421,11 @@ def main() -> None:
         sys.exit(
             asyncio.run(
                 run_scenario(
-                    args.chat_id, args.user_id or args.chat_id, args.admin_id, args.profile
+                    args.chat_id,
+                    args.user_id or args.chat_id,
+                    args.admin_id,
+                    args.profile,
+                    args.pace,
                 )
             )
         )

@@ -9,7 +9,7 @@
 - **Состояние:** Redis (только FSM) + SQLite (вся история)
 - **Админка:** FastAPI + Jinja2, только в локальной сети, HTTP Basic
 - **Реплики:** LM Studio по LAN, OpenRouter через прокси как резерв
-- **Деплой:** Docker Compose на the server, Telegram через xray-прокси
+- **Деплой:** Docker Compose на домашнем сервере, Telegram через xray-прокси
 
 Планирование ведётся в [OpenSpec](https://github.com/Fission-AI/OpenSpec) —
 `openspec/`.
@@ -124,14 +124,14 @@ uv run python -m admin.app   # админка на http://127.0.0.1:8080
 docker compose up -d --build
 ```
 
-### На сервере (the server)
+### На сервере
 
 ```bash
 docker compose -f docker-compose.ubuser.yml up -d --build
 ```
 
-Telegram и OpenRouter идут через контейнер xray (`http://xray:10809`, внешняя
-сеть the external proxy network) — напрямую они отдают `403`. LM Studio задаётся в
+Telegram и OpenRouter идут через контейнер xray (`HTTP_PROXY_URL`) во внешней
+докер-сети, имя которой задаётся `PROXY_NETWORK` — напрямую они отдают `403`. LM Studio задаётся в
 `LMSTUDIO_BASE_URL`, доступна по локальной сети напрямую и через прокси **не**
 ходит.
 

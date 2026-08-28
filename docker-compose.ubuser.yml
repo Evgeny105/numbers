@@ -1,10 +1,10 @@
 # Deployment stack for the home server.
 #
 # Differences from the local stack:
-#   - Telegram and OpenRouter traffic goes through the existing xray container
-#     (the xray container) on the external network the external proxy network. Verified
-#     from this host: OpenRouter direct returns 403, through the proxy 200.
-#     The container alias `xray` is stable across reboots, unlike an IP.
+#   - Telegram and OpenRouter traffic goes through an existing xray container on
+#     an external Docker network, named by PROXY_NETWORK. Verified on the target
+#     host: OpenRouter direct returns 403, through the proxy 200. Addressing the
+#     proxy by its container alias keeps it stable across reboots, unlike an IP.
 #   - LM Studio is on the same LAN and is reached directly at LMSTUDIO_BASE_URL;
 #     it must never go through the proxy.
 #   - The dashboard is published on the single LAN address in ADMIN_WEB_BIND,
@@ -65,7 +65,7 @@ services:
 networks:
   internal:
   proxy:
-    name: ${PROXY_NETWORK}
+    name: ${PROXY_NETWORK:?set PROXY_NETWORK to the external network the proxy is on}
     external: true
 
 volumes:

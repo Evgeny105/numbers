@@ -101,3 +101,51 @@ def test_no_private_network_addresses_in_config_files() -> None:
             continue
         match = pattern.search(path.read_text(encoding="utf-8"))
         assert match is None, f"{name} contains the private address {match.group(0)}"
+
+
+#: This repository is public. None of these belong in it: they identify the
+#: author's machines, accounts and other projects, or are outright secrets.
+PRIVATE_PATTERNS = (
+    (r"\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.[\d.]+", "a private network address"),
+    (r"/home/[a-z][a-z0-9_-]*/", "an absolute home directory path"),
+    (r"\b\d{8,10}:AA[\w-]{30,}", "a Telegram bot token"),
+    (r"sk-or-v1-[\w-]{20,}", "an OpenRouter API key"),
+    (r"\bsk-[a-zA-Z0-9]{32,}", "an API key"),
+)
+
+
+def tracked_text_files() -> list[Path]:
+    """Every tracked file that would be published, minus vendored blobs."""
+    import subprocess
+
+    output = subprocess.run(
+        ["git", "ls-files", "-z"], capture_output=True, text=True, check=True
+    ).stdout
+    files = [Path(name) for name in output.split("\0") if name]
+    return [
+        path
+        for path in files
+        if path.is_file() and path.suffix not in {".min.js", ".png", ".jpg", ".ico", ".lock"}
+    ]
+
+
+@pytest.mark.parametrize("path", tracked_text_files(), ids=str)
+def test_tracked_files_carry_nothing_private(path: Path) -> None:
+    try:
+        source = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return
+    for pattern, description in PRIVATE_PATTERNS:
+        match = re.search(pattern, source)
+        assert match is None, f"{path} contains {description}: {match.group(0)[:24]}…"
+
+
+def test_no_env_file_is_tracked() -> None:
+    """Only the example may ever be committed."""
+    import subprocess
+
+    tracked = subprocess.run(
+        ["git", "ls-files"], capture_output=True, text=True, check=True
+    ).stdout.split()
+    env_files = [name for name in tracked if Path(name).name.startswith(".env")]
+    assert env_files == [".env.example"], f"unexpected env files tracked: {env_files}"

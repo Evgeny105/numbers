@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import itertools
 import logging
+import os
 import re
 import sys
 import time
@@ -33,7 +34,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
 from bot.__main__ import build_bot, build_dispatcher
-from bot.config import Settings
+from bot.config import Settings, e2e_overrides
 from bot.logging_setup import setup_logging
 from bot.math.evaluator import evaluate_display
 from bot.services.llm import LLMClient, build_providers
@@ -80,6 +81,25 @@ class Recorder:
         if text:
             self._sink.append(str(text))
         return await self._inner(bot, method, timeout=timeout)
+
+
+def _apply_token_choice(use_production: bool) -> str:
+    """Decide which bot the harness drives, and say so out loud.
+
+    Getting this wrong is expensive in both directions: driving the production
+    bot spams a real chat, and driving the test bot proves nothing about the
+    deployment. So it is always printed.
+    """
+    if use_production:
+        print("driving the DEPLOYED bot (TOKEN_API_BOT)")
+        return "production"
+    overrides = e2e_overrides()
+    if overrides:
+        os.environ.update(overrides)
+        print("driving the TEST bot (E2E_BOT_TOKEN)")
+        return "test"
+    print("driving the DEPLOYED bot (TOKEN_API_BOT) — no E2E_BOT_TOKEN configured")
+    return "production"
 
 
 async def build_runtime() -> Runtime:
@@ -303,7 +323,12 @@ def admin_steps(chat_id: int, admin_id: int) -> list[Step]:
 
 
 async def run_scenario(
-    chat_id: int, user_id: int, admin_id: int | None, profile: str, pace: float = 1.0
+    chat_id: int,
+    user_id: int,
+    admin_id: int | None,
+    profile: str,
+    pace: float = 1.0,
+    use_production: bool = False,
 ) -> int:
     """Play the scenario.
 
@@ -312,6 +337,7 @@ async def run_scenario(
     so the smoke check runs against the *production* rate limit rather than
     quietly relaxing it.
     """
+    _apply_token_choice(use_production)
     runtime = await build_runtime()
     state: dict[str, Any] = {}
     failures = 0
@@ -348,7 +374,8 @@ async def run_scenario(
     return 0
 
 
-async def run_send(chat_id: int, user_id: int, text: str) -> int:
+async def run_send(chat_id: int, user_id: int, text: str, use_production: bool = False) -> int:
+    _apply_token_choice(use_production)
     runtime = await build_runtime()
     try:
         replies = await feed(runtime, message_update(chat_id, user_id, text))
@@ -359,12 +386,13 @@ async def run_send(chat_id: int, user_id: int, text: str) -> int:
         await runtime.close()
 
 
-async def run_fetch_chat_id() -> int:
+async def run_fetch_chat_id(use_production: bool = False) -> int:
     """Print the chat ids of whoever has messaged the bot recently.
 
     Telegram will not let a bot write to a chat it has never received a message
     from, so this is the one step that needs a human — once, ever.
     """
+    _apply_token_choice(use_production)
     settings = Settings.from_env()
     bot = build_bot(settings)
     try:
@@ -392,12 +420,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
 
-    subparsers.add_parser("fetch-chat-id", help="List chats that have messaged the bot")
+    def add_token_flag(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument(
+            "--production",
+            action="store_true",
+            help="Drive the deployed bot even when E2E_BOT_TOKEN is configured",
+        )
+
+    fetch = subparsers.add_parser("fetch-chat-id", help="List chats that have messaged the bot")
+    add_token_flag(fetch)
 
     send = subparsers.add_parser("send", help="Send one message through the real pipeline")
     send.add_argument("text")
     send.add_argument("--chat-id", type=int, required=True)
     send.add_argument("--user-id", type=int)
+    add_token_flag(send)
 
     scenario = subparsers.add_parser("scenario", help="Play a whole session and check every reply")
     scenario.add_argument("--chat-id", type=int, required=True)
@@ -410,13 +447,18 @@ def main() -> None:
         default=1.0,
         help="Seconds between steps; must stay under the bot's own rate limit",
     )
+    add_token_flag(scenario)
 
     args = parser.parse_args()
 
     if args.action == "fetch-chat-id":
-        sys.exit(asyncio.run(run_fetch_chat_id()))
+        sys.exit(asyncio.run(run_fetch_chat_id(args.production)))
     if args.action == "send":
-        sys.exit(asyncio.run(run_send(args.chat_id, args.user_id or args.chat_id, args.text)))
+        sys.exit(
+            asyncio.run(
+                run_send(args.chat_id, args.user_id or args.chat_id, args.text, args.production)
+            )
+        )
     if args.action == "scenario":
         sys.exit(
             asyncio.run(
@@ -426,6 +468,7 @@ def main() -> None:
                     args.admin_id,
                     args.profile,
                     args.pace,
+                    args.production,
                 )
             )
         )

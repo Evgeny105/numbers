@@ -76,6 +76,21 @@ def _redis_url(raw: str) -> str:
     return f"redis://{raw}"
 
 
+def e2e_overrides() -> dict[str, str]:
+    """Environment overrides the end-to-end harness applies to itself.
+
+    The deployed bot and the test bot are different bots with different tokens.
+    Routine smoke runs should not make the real bot write into a child's chat,
+    so the harness prefers `E2E_BOT_TOKEN` when one is configured and falls back
+    to the deployed token otherwise.
+    """
+    overrides: dict[str, str] = {}
+    token = _optional("E2E_BOT_TOKEN")
+    if token:
+        overrides["TOKEN_API_BOT"] = token
+    return overrides
+
+
 def mask(secret: str) -> str:
     """Render a secret safely for logs and admin pages."""
     if not secret:

@@ -1,0 +1,72 @@
+# Deployment stack for the home server.
+#
+# Differences from the local stack:
+#   - Telegram and OpenRouter traffic goes through the existing xray container
+#     (the xray container) on the external network the external proxy network. Verified
+#     from this host: OpenRouter direct returns 403, through the proxy 200.
+#     The container alias `xray` is stable across reboots, unlike an IP.
+#   - LM Studio (<lm-studio-host>:1234) is on the same LAN and is reached directly;
+#     it must never go through the proxy.
+#   - The dashboard is published on the LAN address only, never 0.0.0.0.
+#
+# Run: docker compose -f docker-compose.ubuser.yml up -d --build
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      REDIS: redis:6379
+      DB_PATH: /data/numbers.sqlite3
+      HTTP_PROXY_URL: http://xray:10809
+    volumes:
+      - bot-data:/data
+    networks:
+      - internal
+      - proxy
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin:
+    build: .
+    command: ["python", "-m", "admin.app"]
+    env_file: .env
+    environment:
+      DB_PATH: /data/numbers.sqlite3
+      HTTP_PROXY_URL: http://xray:10809
+    volumes:
+      - bot-data:/data
+    networks:
+      - internal
+      - proxy
+    ports:
+      - "${ADMIN_WEB_BIND:-127.0.0.1}:${ADMIN_WEB_PORT:-8080}:8080"
+    depends_on:
+      - bot
+    restart: unless-stopped
+
+networks:
+  internal:
+  proxy:
+    name: ${PROXY_NETWORK}
+    external: true
+
+volumes:
+  redis-data:
+  bot-data:

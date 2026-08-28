@@ -1,28 +1,49 @@
+# Local development stack.
+#
+# Redis is deliberately NOT published on the host: nothing outside this network
+# has any business reaching it, and the previous deployment left it open on
+# 0.0.0.0:6379.
 services:
-  redis: 
-    image: redis:alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
     volumes:
-      - redis-data:/data      
+      - redis-data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
-      retries: 3
-      start_period: 10s
       timeout: 5s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
-  math-bot:
+  bot:
     build: .
-    container_name: math-bot-container
     env_file: .env
-    depends_on:
-      - redis
     environment:
-      - REDIS=redis:6379      
+      REDIS: redis:6379
+      DB_PATH: /data/numbers.sqlite3
+    volumes:
+      - bot-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin:
+    build: .
+    command: ["python", "-m", "admin.app"]
+    env_file: .env
+    environment:
+      DB_PATH: /data/numbers.sqlite3
+    volumes:
+      - bot-data:/data
+    ports:
+      - "127.0.0.1:${ADMIN_WEB_PORT:-8080}:8080"
+    depends_on:
+      - bot
     restart: unless-stopped
 
 volumes:
   redis-data:
+  bot-data:

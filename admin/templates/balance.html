@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Баланс{% endblock %}
+{% block content %}
+<h1>Баланс OpenRouter</h1>
+
+{% if not configured %}
+  <div class="panel"><p class="muted">Ключ <code>API_KEY_LLM</code> не задан — запрашивать нечего.</p></div>
+{% else %}
+  {% if report.remaining_fraction is not none %}
+  <div class="cards">
+    <div class="card"><div class="value">{{ report.remaining_credits | money }}</div><div class="label">остаток</div></div>
+    <div class="card"><div class="value">{{ report.total_credits | money }}</div><div class="label">всего кредитов</div></div>
+    <div class="card"><div class="value">{{ report.total_usage | money }}</div><div class="label">потрачено</div></div>
+    <div class="card"><div class="value">{{ report.usage_daily | money }}</div><div class="label">сегодня</div></div>
+    <div class="card"><div class="value">{{ report.usage_weekly | money }}</div><div class="label">за неделю</div></div>
+    <div class="card"><div class="value">{{ report.usage_monthly | money }}</div><div class="label">за месяц</div></div>
+  </div>
+
+  <div class="panel">
+    <div style="height:16px;border-radius:8px;overflow:hidden;background:rgba(127,127,127,.2)">
+      <div style="height:100%;width:{{ (report.remaining_fraction * 100) | round(1) }}%;
+                  background:{{ 'var(--good)' if report.remaining_fraction > 0.3
+                                else ('#d97706' if report.remaining_fraction > 0.1 else 'var(--bad)') }}"></div>
+    </div>
+    <p class="muted" style="margin:8px 0 0">
+      Осталось {{ (report.remaining_fraction * 100) | round(1) }}%
+    </p>
+  </div>
+  {% endif %}
+
+  <div class="panel">
+    <table>
+      <tr><th>Ключ</th><td><code>{{ report.masked_key or '—' }}</code>
+        {% if report.is_free_tier %}<span class="pill">free tier</span>{% endif %}</td></tr>
+      <tr><th>Лейбл</th><td>{{ report.key_label or '—' }}</td></tr>
+      <tr><th>Лимит ключа</th><td>{{ report.limit_remaining | money }} из {{ report.limit | money }}</td></tr>
+      <tr><th>Потрачено по ключу</th><td>{{ report.usage_total | money }}</td></tr>
+      <tr><th>Rate limit</th><td>{{ report.rate_limit or '—' }}</td></tr>
+      <tr><th>Истекает</th><td>{{ report.expires_at or 'бессрочно' }}</td></tr>
+      <tr><th>Обновлено</th><td>
+        {{ report.fetched_at | dt('%d.%m.%Y %H:%M:%S') }}
+        <span class="muted">({{ report.age_seconds | round(0) | int }} с назад)</span>
+      </td></tr>
+    </table>
+    <p style="margin:14px 0 0"><a href="/balance?refresh=true"><button type="button">Обновить сейчас</button></a></p>
+    {% if not report.ok %}
+      <p class="no" style="margin:10px 0 0">Обновить не удалось: {{ report.error }}</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

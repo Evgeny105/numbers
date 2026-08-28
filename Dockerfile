@@ -1,18 +1,25 @@
-# Use the official Python 3.11 image as the base
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements.txt file to the working directory
-COPY requirements.txt .
+# Dependencies first, so a code change does not reinstall the world.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
-# Install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+COPY bot ./bot
+COPY admin ./admin
+COPY tools ./tools
+RUN uv sync --frozen --no-dev
 
-# Copy all files to the working directory in the container
-COPY . .
+# The volume is created by Docker as root; give the unprivileged user a home
+# and let compose mount /data with the right ownership.
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appuser /app /data
+USER appuser
 
-# Specify the command to run the bot
-CMD ["python", "bot.py"]
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    DB_PATH=/data/numbers.sqlite3
+
+CMD ["python", "-m", "bot"]

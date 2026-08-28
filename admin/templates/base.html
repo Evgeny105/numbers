@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Numbers{% endblock %} — админка</title>
+  <script src="/static/chart.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #fff; --ink: #1c2024; --muted: #6b7280;
+      --line: #e5e7eb; --accent: #2563eb; --good: #16a34a; --bad: #dc2626;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14171a; --card: #1c2024; --ink: #e8eaed; --muted: #9aa3ad;
+        --line: #2c3238; --accent: #60a5fa; --good: #4ade80; --bad: #f87171;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    header {
+      background: var(--card); border-bottom: 1px solid var(--line);
+      padding: 12px 20px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+      position: sticky; top: 0; z-index: 10;
+    }
+    header .brand { font-weight: 700; margin-right: 8px; }
+    header a { color: var(--muted); text-decoration: none; padding: 4px 2px; }
+    header a.active, header a:hover { color: var(--accent); }
+    main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 18px; }
+    h2 { font-size: 17px; margin: 26px 0 10px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+    }
+    .card .value { font-size: 26px; font-weight: 650; }
+    .card .label { color: var(--muted); font-size: 13px; }
+    .panel {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 10px; padding: 16px; margin-top: 14px; overflow-x: auto;
+    }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    a { color: var(--accent); }
+    code { background: rgba(127,127,127,.14); padding: 1px 5px; border-radius: 4px; }
+    .ok { color: var(--good); } .no { color: var(--bad); }
+    .muted { color: var(--muted); }
+    .pill {
+      display: inline-block; padding: 1px 8px; border-radius: 999px;
+      background: rgba(127,127,127,.16); font-size: 12px;
+    }
+    button, input, select {
+      font: inherit; padding: 6px 10px; border-radius: 7px;
+      border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    }
+    button { cursor: pointer; }
+    button.danger { border-color: var(--bad); color: var(--bad); }
+    form.inline { display: inline; }
+    pre.logs {
+      margin: 0; font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .chart-box { position: relative; height: 300px; }
+  </style>
+</head>
+<body>
+<header>
+  <span class="brand">🧮 Numbers</span>
+  <a href="/" class="{{ 'active' if page == 'overview' }}">Обзор</a>
+  <a href="/users" class="{{ 'active' if page == 'users' }}">Пользователи</a>
+  <a href="/phrases" class="{{ 'active' if page == 'phrases' }}">Реплики</a>
+  <a href="/moderation" class="{{ 'active' if page == 'moderation' }}">Модерация</a>
+  <a href="/balance" class="{{ 'active' if page == 'balance' }}">Баланс</a>
+  <a href="/logs" class="{{ 'active' if page == 'logs' }}">Логи</a>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

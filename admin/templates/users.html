@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Пользователи{% endblock %}
+{% block content %}
+<h1>Пользователи</h1>
+<div class="panel">
+  <table>
+    <tr>
+      <th>Кто</th><th>ID</th><th>Уровень</th><th class="num">Сложность</th><th class="num">Баллы</th>
+      <th class="num">Ответов</th><th class="num">Верных</th><th class="num">Сессий</th>
+      <th>Первый раз</th><th>Последний раз</th>
+    </tr>
+    {% for user in users %}
+    <tr>
+      <td><a href="/users/{{ user.user_id }}">{{ user.full_name or user.tg_username or user.user_id }}</a>
+        {% if user.banned %}<span class="pill no">бан</span>{% endif %}</td>
+      <td><code>{{ user.user_id }}</code></td>
+      <td>{{ user.grade_profile or '—' }}</td>
+      <td class="num">{{ user.difficulty }}</td>
+      <td class="num">{{ user.score }}</td>
+      <td class="num">{{ user.attempts }}</td>
+      <td class="num">{{ user.success_rate | pct }}</td>
+      <td class="num">{{ user.sessions }}</td>
+      <td>{{ user.first_seen | dt }}</td>
+      <td>{{ user.last_seen | dt }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10" class="muted">Никого ещё не было.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

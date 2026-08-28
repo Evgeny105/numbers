@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Логи{% endblock %}
+{% block content %}
+<h1>Логи</h1>
+<p class="muted">
+  Последние строки из файла в volume. В квадратных скобках — Telegram-id пользователя,
+  чей апдейт обрабатывался.
+</p>
+
+<div class="panel">
+  <form method="get" action="/logs">
+    <select name="name">
+      <option value="bot" {{ 'selected' if name == 'bot' }}>бот</option>
+      <option value="admin" {{ 'selected' if name == 'admin' }}>админка</option>
+    </select>
+    <select name="lines">
+      {% for option in [100, 300, 1000, 5000] %}
+      <option value="{{ option }}" {{ 'selected' if lines == option }}>{{ option }} строк</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Показать</button>
+  </form>
+</div>
+
+<div class="panel">
+  {% if entries %}
+    <pre class="logs">{% for line in entries %}{{ line }}
+{% endfor %}</pre>
+  {% else %}
+    <p class="muted">Файл пуст или ещё не создан.</p>
+  {% endif %}
+</div>
+{% endblock %}

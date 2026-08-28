@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Обзор{% endblock %}
+{% block content %}
+<h1>Обзор</h1>
+
+<div class="cards">
+  <div class="card"><div class="value">{{ today.users }}</div><div class="label">пользователей за сутки</div></div>
+  <div class="card"><div class="value">{{ today.attempts }}</div><div class="label">ответов за сутки</div></div>
+  <div class="card"><div class="value">{{ today.success_rate | pct }}</div><div class="label">верных за сутки</div></div>
+  <div class="card"><div class="value">{{ week.attempts }}</div><div class="label">ответов за неделю</div></div>
+  <div class="card"><div class="value">{{ week.success_rate | pct }}</div><div class="label">верных за неделю</div></div>
+  <div class="card"><div class="value">{{ users | length }}</div><div class="label">всего знакомых</div></div>
+</div>
+
+<h2>Активность за {{ days }} дн.
+  <span class="muted" style="font-weight:400">
+    · <a href="/?days=7">7</a> · <a href="/?days=30">30</a> · <a href="/?days=90">90</a>
+  </span>
+</h2>
+<div class="panel">
+  {% if activity %}
+    <div class="chart-box"><canvas id="activity"></canvas></div>
+  {% else %}
+    <p class="muted">Пока нет ни одного ответа.</p>
+  {% endif %}
+</div>
+
+<h2>Кто решает</h2>
+<div class="panel">
+  <table>
+    <tr>
+      <th>Кто</th><th>Уровень</th><th class="num">Сложность</th><th class="num">Баллы</th>
+      <th class="num">Ответов</th><th class="num">Верных</th><th>Последний раз</th>
+    </tr>
+    {% for user in users %}
+    <tr>
+      <td><a href="/users/{{ user.user_id }}">{{ user.full_name or user.tg_username or user.user_id }}</a>
+        {% if user.banned %}<span class="pill no">бан</span>{% endif %}</td>
+      <td>{{ user.grade_profile or '—' }}</td>
+      <td class="num">{{ user.difficulty }}</td>
+      <td class="num">{{ user.score }}</td>
+      <td class="num">{{ user.attempts }}</td>
+      <td class="num">{{ user.success_rate | pct }}</td>
+      <td>{{ user.last_seen | dt }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">Никого ещё не было.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% if activity %}
+<script id="activity-data" type="application/json">{{ activity | tojson }}</script>
+<script>
+  const activity = JSON.parse(document.getElementById('activity-data').textContent);
+  new Chart(document.getElementById('activity'), {
+    data: {
+      labels: activity.map(r => r.day),
+      datasets: [
+        { type: 'bar', label: 'ответов', data: activity.map(r => r.attempts),
+          backgroundColor: 'rgba(37,99,235,.35)', borderColor: 'rgba(37,99,235,.9)', borderWidth: 1 },
+        { type: 'bar', label: 'верных', data: activity.map(r => r.correct),
+          backgroundColor: 'rgba(22,163,74,.45)', borderColor: 'rgba(22,163,74,.9)', borderWidth: 1 },
+        { type: 'line', label: 'пользователей', data: activity.map(r => r.users),
+          borderColor: 'rgba(220,38,38,.9)', backgroundColor: 'rgba(220,38,38,.9)',
+          yAxisID: 'y1', tension: .25 }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'ответы' } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false },
+              title: { display: true, text: 'люди' }, ticks: { precision: 0 } }
+      }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

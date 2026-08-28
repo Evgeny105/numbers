@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Модерация{% endblock %}
+{% block content %}
+<h1>Модерация</h1>
+<p class="muted">Бот открыт всем, поэтому банить приходится вручную. Забаненный не получает ответа вообще.</p>
+
+<h2>Забаненные</h2>
+<div class="panel">
+  <table>
+    <tr><th>Кто</th><th>ID</th><th>Причина</th><th>Когда</th><th></th></tr>
+    {% for user in banned %}
+    <tr>
+      <td>{{ user.full_name or user.tg_username or user.user_id }}</td>
+      <td><code>{{ user.user_id }}</code></td>
+      <td>{{ user.ban_reason or '—' }}</td>
+      <td>{{ user.banned_at | dt }}</td>
+      <td>
+        <form class="inline" method="post" action="/moderation/unban">
+          <input type="hidden" name="user_id" value="{{ user.user_id }}">
+          <button type="submit">Разбанить</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">Никто не забанен.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>Забанить</h2>
+<div class="panel">
+  <form method="post" action="/moderation/ban">
+    <select name="user_id" required>
+      {% for user in users if not user.banned %}
+      <option value="{{ user.user_id }}">
+        {{ user.full_name or user.tg_username or user.user_id }} ({{ user.user_id }})
+      </option>
+      {% endfor %}
+    </select>
+    <input type="text" name="reason" placeholder="причина" maxlength="200">
+    <button class="danger" type="submit">Забанить</button>
+  </form>
+</div>
+
+<h2>События модерации и защиты</h2>
+<div class="panel">
+  <table>
+    <tr><th>Когда</th><th>Кто</th><th>Что</th><th>Детали</th></tr>
+    {% for event in events %}
+    <tr>
+      <td>{{ event.ts | dt('%d.%m %H:%M:%S') }}</td>
+      <td>{% if event.user_id %}<a href="/users/{{ event.user_id }}">{{ event.user_id }}</a>{% else %}—{% endif %}</td>
+      <td><span class="pill">{{ event.kind }}</span></td>
+      <td class="muted">{{ event.payload_json or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">Ничего не происходило.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

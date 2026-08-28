@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Реплики{% endblock %}
+{% block content %}
+<h1>Пул реплик</h1>
+<p class="muted">
+  Реплики генерирует LLM в фоне и пополняет пул по мере использования.
+  Отключённая реплика больше не показывается и уходит в промпт как пример того, чего писать не надо.
+</p>
+
+<div class="panel">
+  <table>
+    <tr><th>Категория</th><th>Что это</th><th class="num">Готовых</th><th class="num">Отключено</th></tr>
+    {% for key, category in categories.items() %}
+    <tr>
+      <td><a href="/phrases?category={{ key }}">{{ category.title }}</a></td>
+      <td class="muted">{{ category.brief }}</td>
+      <td class="num">{{ overview.get(key, {}).get('usable', 0) }}</td>
+      <td class="num">{{ overview.get(key, {}).get('disabled', 0) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>{{ categories[selected].title }}</h2>
+<div class="panel">
+  <table>
+    <tr><th>Реплика</th><th>Откуда</th><th class="num">Видели</th><th>Создана</th><th></th></tr>
+    {% for phrase in phrases %}
+    <tr {% if phrase.disabled %}class="muted"{% endif %}>
+      <td>{{ phrase.text }}{% if phrase.disabled %} <span class="pill no">отключена</span>{% endif %}</td>
+      <td class="muted">{{ phrase.provider }}{% if phrase.model %} · {{ phrase.model }}{% endif %}</td>
+      <td class="num">{{ phrase.seen_by }}</td>
+      <td>{{ phrase.created_at | dt }}</td>
+      <td>
+        {% if phrase.disabled %}
+        <form class="inline" method="post" action="/phrases/{{ phrase.id }}/enable">
+          <input type="hidden" name="category" value="{{ selected }}">
+          <button type="submit">Вернуть</button>
+        </form>
+        {% else %}
+        <form class="inline" method="post" action="/phrases/{{ phrase.id }}/disable">
+          <input type="hidden" name="category" value="{{ selected }}">
+          <button class="danger" type="submit">Отключить</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">В этой категории пока пусто — бот отвечает встроенными репликами.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

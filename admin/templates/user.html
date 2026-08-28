@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ user.full_name or user.user_id }}{% endblock %}
+{% block content %}
+<h1>{{ user.full_name or user.tg_username or user.user_id }}
+  <span class="muted" style="font-size:15px">
+    <code>{{ user.user_id }}</code>{% if user.tg_username %} @{{ user.tg_username }}{% endif %}
+  </span>
+  {% if user.banned %}<span class="pill no">забанен</span>{% endif %}
+</h1>
+
+<div class="cards">
+  <div class="card"><div class="value">{{ user.grade_profile or '—' }}</div><div class="label">уровень</div></div>
+  <div class="card"><div class="value">{{ user.difficulty }}</div><div class="label">сложность</div></div>
+  <div class="card"><div class="value">{{ user.score }}</div><div class="label">баллов</div></div>
+  <div class="card"><div class="value">{{ user.attempts or 0 }}</div><div class="label">ответов</div></div>
+  <div class="card"><div class="value">{{ user.success_rate | pct }}</div><div class="label">верных</div></div>
+  <div class="card"><div class="value">{{ user.sessions }}</div><div class="label">сессий</div></div>
+</div>
+
+<h2>Баллы и сложность во времени</h2>
+<div class="panel">
+  {% if progress %}
+    <div class="chart-box"><canvas id="progress"></canvas></div>
+    <p class="muted" style="margin:10px 0 0">
+      Если линия сложности долго идёт вниз — примеры стали проще, чем стоило бы.
+    </p>
+  {% else %}
+    <p class="muted">Ещё нет ответов.</p>
+  {% endif %}
+</div>
+
+<h2>Сессии</h2>
+<div class="panel">
+  <table>
+    <tr><th>Начало</th><th>Конец</th><th>Причина</th><th class="num">Примеров</th><th class="num">Решено</th></tr>
+    {% for session in sessions %}
+    <tr>
+      <td>{{ session.started_at | dt }}</td>
+      <td>{{ session.ended_at | dt }}</td>
+      <td>{{ session.end_reason or '—' }}</td>
+      <td class="num">{{ session.tasks_total }}</td>
+      <td class="num">{{ session.tasks_correct }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">Сессий пока нет.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>Последние ответы</h2>
+<div class="panel">
+  <table>
+    <tr>
+      <th>Когда</th><th>Пример</th><th class="num">Верный</th><th class="num">Ответил</th>
+      <th class="num">Попытка</th><th></th><th class="num">Сложность</th><th class="num">Думал</th>
+    </tr>
+    {% for attempt in attempts %}
+    <tr>
+      <td>{{ attempt.ts | dt('%d.%m %H:%M:%S') }}</td>
+      <td><code>{{ attempt.expression }}</code></td>
+      <td class="num">{{ attempt.correct_answer }}</td>
+      <td class="num">{{ attempt.given_answer }}</td>
+      <td class="num">{{ attempt.attempt_no }}</td>
+      <td>{% if attempt.is_correct %}<span class="ok">✓</span>{% else %}<span class="no">✗</span>{% endif %}</td>
+      <td class="num">{{ attempt.difficulty }}</td>
+      <td class="num">{{ '%.1f с' % (attempt.ms_to_answer / 1000) if attempt.ms_to_answer else '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">Ответов пока нет.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>События</h2>
+<div class="panel">
+  <table>
+    <tr><th>Когда</th><th>Что</th><th>Детали</th></tr>
+    {% for event in events %}
+    <tr>
+      <td>{{ event.ts | dt('%d.%m %H:%M:%S') }}</td>
+      <td><span class="pill">{{ event.kind }}</span></td>
+      <td class="muted">{{ event.payload_json or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="muted">Событий пока нет.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% if progress %}
+<script id="progress-data" type="application/json">{{ progress | tojson }}</script>
+<script>
+  const progress = JSON.parse(document.getElementById('progress-data').textContent);
+  const labels = progress.map(p => new Date(p.ts * 1000).toLocaleString('ru-RU',
+    { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
+  new Chart(document.getElementById('progress'), {
+    data: {
+      labels,
+      datasets: [
+        { type: 'line', label: 'баллы', data: progress.map(p => p.score),
+          borderColor: 'rgba(37,99,235,.9)', tension: .2, pointRadius: 0 },
+        { type: 'line', label: 'сложность', data: progress.map(p => p.difficulty),
+          borderColor: 'rgba(220,38,38,.9)', tension: .2, pointRadius: 0, yAxisID: 'y1', stepped: true }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'баллы' } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false },
+              title: { display: true, text: 'сложность' }, ticks: { precision: 0 } }
+      }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

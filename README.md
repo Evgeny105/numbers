@@ -1,314 +1,182 @@
-# 🤖 Numbers Math Bot
+# Numbers — бот для устного счёта
 
-![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
-![aiogram](https://img.shields.io/badge/aiogram-3.17.0-9cf.svg)
+Телеграм-бот, который тренирует устный счёт: выдаёт примеры, даёт три попытки,
+считает баллы и подстраивает сложность. Пишет историю каждого ответа в SQLite,
+показывает её в веб-админке и подбадривает ребёнка репликами, которые в фоне
+сочиняет LLM.
 
-A Telegram bot designed to help 3rd-grade students (ages 8-9) practice mental arithmetic through adaptive math problems with gamification elements.
+- **Бот:** aiogram 3, Python 3.12, `uv`
+- **Состояние:** Redis (только FSM) + SQLite (вся история)
+- **Админка:** FastAPI + Jinja2, только в локальной сети, HTTP Basic
+- **Реплики:** LM Studio по LAN, OpenRouter через прокси как резерв
+- **Деплой:** Docker Compose на the server, Telegram через xray-прокси
 
-## ✨ Key Features
+Планирование ведётся в [OpenSpec](https://github.com/Fission-AI/OpenSpec) —
+`openspec/`.
 
-- 🎯 **Adaptive Difficulty**: 5 progressive levels that adjust based on user performance
-- 🧮 **Smart Expression Generation**: Pedagogically-appropriate math problems with constraints
-- 🏆 **Gamification System**: Points, encouraging feedback, and progress tracking
-- 🔄 **Three Attempts**: Multiple chances per problem with diminishing rewards
-- 📊 **Progress Tracking**: Automatic difficulty increases every 10 points (0-49 range)
-- 🎮 **Engaging Interface**: Emojis and positive reinforcement for kids
-- 🐳 **Docker Ready**: Easy deployment with containerized architecture
-- 💾 **State Persistence**: Redis storage with automatic fallback to memory
-- 📝 **Comprehensive Logging**: Structured logging for monitoring and debugging
-- ✅ **Type Safe**: Fully typed with Pylance/VSCode IDE support
+## Как это работает
 
-## 🎓 How It Works
+### Примеры
 
-### Problem Generation
+Генератор сначала выбирает ответ, а затем раскладывает его на выражение, выбирая
+операцию по весам профиля и **конструируя** операнды под неё. Поэтому все
+ограничения выполняются по построению, а не отбраковкой:
 
-The bot generates math problems tailored for 3rd-grade students with these constraints:
+- все промежуточные результаты — целые и неотрицательные;
+- деление всегда нацело;
+- в любом умножении хотя бы один множитель ≤ 10;
+- каждое значение внутри диапазона выбранного класса.
 
-- **Number Range**: Integers from 0 to 1000
-- **Operations**: Addition, subtraction, multiplication, and limited division
-- **Multiplication**: One factor always ≤ 10 for mental calculation
-- **Division**: Only integer results (no remainders)
-- **Intermediate Results**: Always positive, never negative
-- **Structure Complexity**: Progresses from simple to multi-step expressions with parentheses
+Профиль класса выбирает пользователь; сложность (число операций) подстраивается
+внутри профиля и **не** выводит за его пределы. Шкала возрастающая: больше —
+сложнее.
 
-### Difficulty Levels
+| Профиль | Числа | Сложность | Делимое |
+|---|---|---|---|
+| `grade3` | до 100 | 1–4 операции | делитель до 10 |
+| `grade4` | до 1000+, промежуточные до 3000 | 1–5 операций | делитель до 12 |
 
-```
-Level 0 (0-9 points)    → Most complex (up to 5 operations with parentheses)
-Level 1 (10-19 points)  → High complexity (4 operations, some parentheses)
-Level 2 (20-29 points)  → Medium complexity (3 operations)
-Level 3 (30-39 points)  → Lower complexity (2 operations)
-Level 4 (40-49 points)  → Simple (1-2 operations)
-```
+Дробей и отрицательных чисел нет.
 
-### Scoring System
+### Баллы и сложность
 
-- ✅ **Correct Answer**: +1 point
-- ❌ **Wrong Answer (after 3 attempts)**: -1 point
-- 🎯 **Progression**: Difficulty decreases as points increase (makes problems easier)
-- 📉 **Regression**: Difficulty increases when points decrease (makes problems harder)
+Верный ответ — +1 балл, три неверных подряд — −1. Каждые 10 баллов поднимают
+сложность на шаг в пределах профиля. Каждое изменение сложности пишется
+отдельным событием, поэтому по графику в админке видно, если ребёнок сполз на
+уровень попроще.
 
-## 🚀 Quick Start
+### Реплики
 
-### Prerequisites
+Похвалы и утешения берутся из пула в базе. Учёт «показано» — **пер-юзерный**:
+одна и та же реплика может быть новой для одного и уже виденной для другого.
+Выбор — сначала невиденные, затем самая давняя. Использование реплики ставит
+задание фоновому воркеру, который пополняет пул до 10 (потолок 40, лишние
+вытесняются).
 
-- Python 3.11+
-- Docker & Docker Compose (for container deployment)
-- Redis (optional, falls back to memory storage)
-- Telegram Bot Token from [@BotFather](https://t.me/botfather)
+Путь ответа никогда не ждёт LLM. Если пул пуст и провайдеры недоступны, бот
+отвечает встроенными репликами из `bot/texts.py`.
 
-### Docker Deployment (Recommended)
+Каждая сгенерированная реплика проходит валидацию перед попаданием в пул:
+длина, только кириллица/цифры/пунктуация/эмодзи, без ссылок, без разметки, без
+латиницы, без арифметики и многозначных чисел. Плюс HTML-экранирование при
+отправке.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Evgeny105/numbers.git
-   cd numbers
-   ```
+## Команды
 
-2. **Create environment file**
-   ```bash
-   echo "TOKEN_API_BOT=<your_bot_token>" > .env
-   echo "REDIS=localhost:6379" >> .env
-   ```
+| Команда | Кому | Что делает |
+|---|---|---|
+| `/start` | всем | начать или продолжить |
+| `/level` | всем | выбрать класс |
+| `/stop` | всем | закончить сессию |
+| `/help` | всем | справка |
+| `/stats` | админам | сводка за сутки и неделю |
+| `/users` | админам | список пользователей |
+| `/user <id>` | админам | карточка пользователя |
+| `/ban <id> [причина]`, `/unban <id>` | админам | модерация |
+| `/phrases` | админам | состояние пула реплик |
+| `/balance` | админам | баланс OpenRouter |
+| `/health` | админам | техническое состояние |
 
-3. **Build and run**
-   ```bash
-   docker compose up --build -d
-   ```
+Не-админ, отправивший админскую команду, получает обычный ответ-заглушку —
+существование этих команд не раскрывается.
 
-4. **View logs**
-   ```bash
-   docker logs -f math-bot-container
-   ```
+## Админка
 
-### Local Development
+`http://<хост>:8080`, HTTP Basic, только из локальной сети.
 
-1. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+- **Обзор** — активность по дням, доля верных ответов, список решающих
+- **Пользователи** — итоги по каждому
+- **Карточка** — графики баллов и сложности во времени, сессии, последние
+  ответы с примером, данным ответом и временем на раздумье, лента событий
+- **Реплики** — пул по категориям, кто сгенерировал, сколько человек видело,
+  отключение реплики
+- **Модерация** — баны, события throttling
+- **Баланс** — кредиты и расход OpenRouter
+- **Логи** — последние строки лог-файла бота и админки
 
-2. **Set environment variables**
-   ```bash
-   export TOKEN_API_BOT=<your_bot_token>
-   export REDIS=localhost:6379  # Optional
-   export LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
-   ```
+Chart.js лежит в репозитории (`admin/static/`), а не тянется с CDN: сервер ходит
+наружу только через прокси, и админка не должна слепнуть, если прокси икнул.
 
-3. **Run the bot**
-   ```bash
-   python bot.py
-   ```
+## Конфигурация
 
-## 📋 Configuration
+Всё через переменные окружения, полный список с комментариями — в
+`.env.example`. Обязательные: `TOKEN_API_BOT`, `ADMIN_IDS`,
+`ADMIN_WEB_PASSWORD`.
 
-### Environment Variables
+Конфигурация проверяется при старте: не хватает переменной или в `ADMIN_IDS`
+не число — процесс падает с внятным сообщением, а не уходит в тихий
+restart-loop.
 
-| Variable        | Required | Default | Description                                                       |
-| --------------- | -------- | ------- | ----------------------------------------------------------------- |
-| `TOKEN_API_BOT` | ✅ Yes    | -       | Telegram bot token from @BotFather                                |
-| `REDIS`         | ❌ No     | -       | Redis connection URL (format: `host:port` or `redis://host:port`) |
-| `LOG_LEVEL`     | ❌ No     | `INFO`  | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)               |
+## Запуск
 
-### Redis Configuration
-
-The bot supports Redis for persistent state storage across restarts. If Redis is unavailable, the bot automatically falls back to in-memory storage (user progress resets on restart).
-
-**Examples:**
-```bash
-# Simple connection
-REDIS=localhost:6379
-
-# Full URL with protocol
-REDIS=redis://localhost:6379/0
-
-# With password
-REDIS=redis://:password@localhost:6379
-```
-
-## 🏗️ Architecture
-
-```
-┌─────────────┐
-│   Telegram  │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────────────────────┐
-│          bot.py (Main)           │
-│  - Command handlers              │
-│  - Message handlers              │
-│  - User interaction logic        │
-└──────┬──────────┬───────────────┘
-       │          │
-       │          ▼
-       │  ┌─────────────────────────┐
-       │  │   gen.py (Engine)     │
-       │  │  - Expression gen     │
-       │  │  - Constraint check    │
-       │  └─────────────────────────┘
-       │
-       ▼
-┌─────────────────────────────────────┐
-│         states.py                │
-│  - FSM state definitions        │
-│  - User session states         │
-└──────┬──────────────────────────┘
-       │
-       ▼
-┌─────────────────────────────────────┐
-│    redis_handlers.py            │
-│  - Redis initialization        │
-│  - Storage configuration      │
-└──────┬──────────────────────────┘
-       │
-       ▼
-┌─────────────────────────────────────┐
-│         Storage Backend           │
-│  Redis (persistent)            │
-│  Memory (fallback)             │
-└─────────────────────────────────────┘
-```
-
-## 📂 Project Structure
-
-```
-numbers/
-├── bot.py                # Main bot logic and handlers
-├── gen.py                # Math expression generation engine
-├── states.py             # FSM state definitions
-├── redis_handlers.py     # Redis storage initialization
-├── requirements.txt      # Python dependencies
-├── Dockerfile           # Container definition
-├── docker-compose.yml    # Multi-container setup
-├── .env                # Environment variables (create manually)
-├── .gitignore         # Git ignore patterns
-├── README.md           # This file
-└── memory-bank/       # Project documentation
-    ├── projectbrief.md
-    ├── productContext.md
-    ├── systemPatterns.md
-    ├── techContext.md
-    ├── activeContext.md
-    ├── progress.md
-    └── library-docs.md
-```
-
-## 🎮 User Commands
-
-| Command  | Description                     |
-| -------- | ------------------------------- |
-| `/start` | Start the bot or resume session |
-| `/stop`  | End session and clear progress  |
-
-## 🔧 Development
-
-### Tech Stack
-
-- **Framework**: aiogram 3.17.0 (Telegram Bot API wrapper)
-- **Storage**: Redis with Memory fallback
-- **Language**: Python 3.11+
-- **Type Checking**: Pylance (VSCode)
-- **Container**: Docker & Docker Compose
-
-### Adding Features
-
-The codebase is well-documented and type-annotated. Key modules:
-
-- **`bot.py`**: All Telegram interaction logic
-- **`gen.py`**: Expression generation algorithms
-- **`states.py`**: FSM state management
-- **`redis_handlers.py`**: Storage layer abstraction
-
-See `memory-bank/library-docs.md` for aiogram 3.17.0 API reference.
-
-### Code Quality
-
-- ✅ Full type annotations for IDE support
-- ✅ Comprehensive docstrings for all functions
-- ✅ Proper async/await patterns
-- ✅ Graceful error handling
-- ✅ Input validation and sanitization
-- ✅ AST-based safe expression evaluation
-
-## 🐳 Docker Operations
-
-### Build and Start
-```bash
-docker compose up --build -d
-```
-
-### Stop
-```bash
-docker compose down
-```
-
-### Rebuild from Scratch
-```bash
-docker compose down
-docker compose up --build -d
-```
-
-### View Logs
-```bash
-docker logs -f math-bot-container
-```
-
-### Restart
-```bash
-docker compose restart
-```
-
-## 📊 Monitoring
-
-The bot provides structured logging accessible via Docker logs:
+### Локально
 
 ```bash
-docker logs -f math-bot-container | grep "INFO"
+uv sync --group dev
+cp .env.example .env    # заполнить
+uv run python -m bot
+uv run python -m admin.app   # админка на http://127.0.0.1:8080
 ```
 
-Log levels:
-- `DEBUG`: Detailed diagnostic information
-- `INFO`: Normal operational messages
-- `WARNING`: Warning messages for non-critical issues
-- `ERROR`: Error messages for failures
+### Docker
 
-## 🤝 Contributing
+```bash
+docker compose up -d --build
+```
 
-Contributions are welcome! Please follow these guidelines:
+### На сервере (the server)
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```bash
+docker compose -f docker-compose.ubuser.yml up -d --build
+```
 
-### Code Style
+Telegram и OpenRouter идут через контейнер the xray container
+(`http://xray:10809`, внешняя сеть the external proxy network) — напрямую они
+отдают `403`. LM Studio на `<lm-studio-host>:1234` доступна по LAN напрямую и через
+прокси **не** ходит.
 
-- Follow existing code structure and patterns
-- Add type annotations to all new functions
-- Include docstrings with Args, Returns sections
-- Use Russian for user-facing text
-- Maintain existing error handling patterns
+## Тесты
 
-## 📄 License
+```bash
+uv run pytest                    # юнит-тесты: без сети, без Redis, без LLM
+uv run pytest tests/integration  # по требованию: живые LM Studio и OpenRouter
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Юнит-тесты гоняют обработчики через **настоящий** `Dispatcher` со всеми
+middleware, подменяя только исходящую сессию Telegram, — так что ломаются они по
+тем же причинам, по которым сломался бы прод, но в сеть не ходят.
 
-## 🙏 Acknowledgments
+Отдельно есть структурные тесты-сторожа: они падают, если в коде появится
+`eval`/`exec`/`compile`, незаждаемый `asyncio.create_task` вокруг записи
+состояния или логирование секрета без маскирования. Каждый соответствует
+дефекту, который реально был в предыдущей версии.
 
-- Built with [aiogram](https://github.com/aiogram/aiogram) - Modern async Telegram bot framework
-- Inspired by educational apps that make learning fun
-- For the young mathematicians who inspire this project
+### Прогон вживую, без человека
 
-## 📞 Support
+```bash
+# один раз: написать боту что угодно руками, чтобы чат существовал
+uv run python -m tools.e2e_client fetch-chat-id
 
-For issues, questions, or suggestions:
-- Open an issue on [GitHub](https://github.com/Evgeny105/numbers/issues)
-- Contact the maintainers
+# дальше всё скриптом
+uv run python -m tools.e2e_client scenario --chat-id <id> --admin-id <id>
+```
 
----
+`scenario` играет целую сессию — старт, выбор класса, верный ответ, три
+неверных, нечисловой ввод, `/stop`, админские команды — сверяет каждый ответ и
+возвращает ненулевой код при расхождении. Он же служит smoke-проверкой после
+деплоя.
 
-**Made with ❤️ for young mathematicians**
+## Безопасность
+
+Бот открыт всем, поэтому:
+
+- пер-юзерный throttling, лишнее гасится молча и пишется в события;
+- лимит длины входящего текста;
+- ручной бан через админку или `/ban`, переживает рестарт;
+- всё пользовательское экранируется перед отправкой с `parse_mode=HTML`;
+- вывод LLM валидируется как недоверенный ввод;
+- никакого динамического выполнения кода;
+- контейнеры от непривилегированного пользователя;
+- Redis не публикуется на хост;
+- админка только в LAN и под паролем;
+- секреты только в окружении, в логах маскируются.

@@ -18,6 +18,8 @@ from bot.handlers import fallback as fallback_handlers
 from bot.handlers import quiz as quiz_handlers
 from bot.handlers import start as start_handlers
 from bot.logging_setup import setup_logging
+from bot.profile import apply_profile, build_profile
+from bot.middlewares.admin_menu import AdminMenuMiddleware
 from bot.middlewares.audit import AuditMiddleware
 from bot.middlewares.ban import BanMiddleware
 from bot.middlewares.throttle import ThrottleMiddleware
@@ -55,6 +57,8 @@ def build_dispatcher(
     """
     dispatcher = Dispatcher(storage=storage) if storage is not None else Dispatcher()
 
+    profile = build_profile(settings.admin_ids, settings.bot_display_name)
+    admin_menu_middleware = AdminMenuMiddleware(profile, settings.admin_ids)
     ban_middleware = BanMiddleware(db)
     throttle_middleware = ThrottleMiddleware(
         db, settings.throttle_messages, settings.throttle_window_seconds
@@ -65,6 +69,7 @@ def build_dispatcher(
         observer.outer_middleware(ban_middleware)
         observer.outer_middleware(throttle_middleware)
         observer.outer_middleware(AuditMiddleware(db, settings.session_idle_timeout_seconds))
+        observer.outer_middleware(admin_menu_middleware)
 
     dispatcher["db"] = db
     dispatcher["phrases"] = phrases
@@ -72,6 +77,8 @@ def build_dispatcher(
     dispatcher["settings"] = settings
     dispatcher["ban_middleware"] = ban_middleware
     dispatcher["throttle_middleware"] = throttle_middleware
+    dispatcher["admin_menu_middleware"] = admin_menu_middleware
+    dispatcher["profile"] = profile
     dispatcher["max_input_length"] = settings.max_input_length
     dispatcher["started_at"] = started_at if started_at is not None else time.time()
 
@@ -121,6 +128,17 @@ async def run() -> None:
     try:
         me = await bot.get_me()
         _LOGGER.info("connected to Telegram as @%s (id=%s)", me.username, me.id)
+
+        # The menu is a nicety: a Telegram hiccup here must not stop the bot
+        # from answering a child.
+        try:
+            changed = await apply_profile(bot, dispatcher["profile"])
+            for entry in changed:
+                if entry.startswith("commands:"):
+                    dispatcher["admin_menu_middleware"].mark_synced(int(entry.split(":")[1]))
+        except Exception:
+            _LOGGER.exception("could not apply the bot profile; continuing without it")
+
         await phrases.start()
         await dispatcher.start_polling(bot)
     finally:

@@ -19,7 +19,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.session.base import BaseSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import TelegramMethod
-from aiogram.types import Chat, Message, Update, User
+from aiogram.types import BotCommand, Chat, Message, Update, User
 
 from bot.config import Settings
 from bot.services.openrouter import OpenRouterService
@@ -55,9 +55,25 @@ class RecordingSession(BaseSession):
     async def close(self) -> None:  # pragma: no cover - nothing to close
         pass
 
+    @property
+    def command_scopes(self) -> dict[Any, tuple[str, ...]]:
+        """Command menus this session was asked to set, keyed by scope."""
+        result: dict[Any, tuple[str, ...]] = {}
+        for request in self.requests:
+            if type(request).__name__ == "SetMyCommands":
+                scope = getattr(request, "scope", None)
+                key = getattr(scope, "chat_id", "default")
+                result[key] = tuple(c.command for c in request.commands)
+        return result
+
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None):
         self.requests.append(method)
         name = type(method).__name__
+        if name == "GetMyCommands":
+            # Report an empty menu, so anything wanting one has to set it.
+            return []
+        if name == "SetMyCommands":
+            return True
         if name in ("SendMessage", "EditMessageText"):
             return Message(
                 message_id=next(_message_ids),
@@ -142,6 +158,7 @@ def make_settings(db_path: str, **overrides: Any) -> Settings:
         admin_ids=frozenset({TEST_ADMIN_ID}),
         http_proxy_url="",
         log_level="WARNING",
+        bot_display_name="",
         llm_api_key="",
         lmstudio_base_url="",
         lmstudio_model="",

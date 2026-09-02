@@ -111,6 +111,7 @@ class Settings:
 
     http_proxy_url: str
     log_level: str
+    bot_display_name: str
 
     llm_api_key: str
     lmstudio_base_url: str
@@ -145,6 +146,9 @@ class Settings:
             admin_ids=admin_ids,
             http_proxy_url=_optional("HTTP_PROXY_URL"),
             log_level=_optional("LOG_LEVEL", "INFO").upper(),
+            # Empty leaves the bot called whatever it is already called:
+            # renaming somebody's bot is not a deploy side effect.
+            bot_display_name=_optional("BOT_DISPLAY_NAME"),
             llm_api_key=_optional("API_KEY_LLM"),
             lmstudio_base_url=_optional("LMSTUDIO_BASE_URL"),
             lmstudio_model=_optional("LMSTUDIO_MODEL", "gigachat3.1-10b-a1.8b"),
@@ -212,4 +216,7 @@ class AdminWebSettings:
             openrouter_base_url=_optional("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             balance_cache_seconds=_int("BALANCE_CACHE_SECONDS", 300),
             log_level=_optional("LOG_LEVEL", "INFO").upper(),
+            # Empty leaves the bot called whatever it is already called:
+            # renaming somebody's bot is not a deploy side effect.
+            bot_display_name=_optional("BOT_DISPLAY_NAME"),
         )

@@ -216,7 +216,4 @@ class AdminWebSettings:
             openrouter_base_url=_optional("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             balance_cache_seconds=_int("BALANCE_CACHE_SECONDS", 300),
             log_level=_optional("LOG_LEVEL", "INFO").upper(),
-            # Empty leaves the bot called whatever it is already called:
-            # renaming somebody's bot is not a deploy side effect.
-            bot_display_name=_optional("BOT_DISPLAY_NAME"),
         )

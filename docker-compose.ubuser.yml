@@ -13,7 +13,7 @@
 # Run: docker compose -f docker-compose.ubuser.yml up -d --build
 services:
   redis:
-    image: redis:7-alpine
+    image: local-hardened/numbers-redis-1:ca-20261022-v2
     command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
     volumes:
       - redis-data:/data
@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
 
   bot:
+    image: local-hardened/numbers-bot-1:ca-20261022-v2
     build: .
     env_file: .env
     environment:
@@ -45,6 +46,7 @@ services:
     restart: unless-stopped
 
   admin:
+    image: local-hardened/numbers-admin-1:ca-20261022-v2
     build: .
     command: ["python", "-m", "admin.app"]
     env_file: .env

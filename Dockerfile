@@ -23,3 +23,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DB_PATH=/data/numbers.sqlite3
 
 CMD ["python", "-m", "bot"]
+
+# Local CA distrust patch: preserve application/dependency versions.
+USER root
+COPY strip-revoked-ca.py /usr/local/bin/strip-revoked-ca.py
+COPY public-ca-20260816.pem /usr/local/bin/public-ca-20260816.pem
+RUN python3 /usr/local/bin/strip-revoked-ca.py
+USER appuser
